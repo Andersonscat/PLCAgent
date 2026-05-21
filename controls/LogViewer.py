@@ -30,6 +30,7 @@ from weakref import proxy
 import numpy
 import wx
 
+import ide_theme
 from controls.CustomToolTip import CustomToolTip, TOOLTIP_WAIT_PERIOD
 from editors.DebugViewer import DebugViewer, REFRESH_PERIOD
 from runtime.loglevels import LogLevelsCount, LogLevels
@@ -329,6 +330,8 @@ class LogViewer(DebugViewer, wx.Panel):
         main_sizer.Add(message_panel_sizer, border=5, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.GROW)
 
         self.MessagePanel = wx.Panel(self)
+        # Light-modern background; the custom BufferedDC paint clears to this.
+        self.MessagePanel.SetBackgroundColour(ide_theme.CONSOLE_BG)
         if wx.Platform == '__WXMSW__':
             self.Font = wx.Font(8, wx.SWISS, wx.NORMAL, wx.NORMAL, faceName='Courier New')
         else:

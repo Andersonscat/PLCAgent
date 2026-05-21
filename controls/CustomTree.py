@@ -96,6 +96,8 @@ class CustomTree(CT.CustomTreeCtrl):
 
     def GetBitmapRect(self):
         client_size = self.GetClientSize()
+        if self.BackgroundBitmap is None:
+            return wx.Rect(0, 0, 0, 0)
         bitmap_size = self.BackgroundBitmap.GetSize()
 
         if self.BackgroundAlign & wx.ALIGN_RIGHT:
@@ -135,6 +137,8 @@ class CustomTree(CT.CustomTreeCtrl):
 
         dc.Clear()
 
+        if self.BackgroundBitmap is None:
+            return
         bitmap_rect = self.GetBitmapRect()
         dc.DrawBitmap(self.BackgroundBitmap, bitmap_rect.x, bitmap_rect.y)
 

@@ -544,8 +544,8 @@ class SFC_Step(Graphic_Element, DebugDataConsumer):
         elif self.Forced:
             dc.SetPen(MiterPen(wx.BLUE))
         else:
-            dc.SetPen(MiterPen(wx.BLACK))
-        dc.SetBrush(wx.WHITE_BRUSH)
+            dc.SetPen(MiterPen(ELEMENT_INK))
+        dc.SetBrush(ELEMENT_PAPER_BRUSH)
 
         if getattr(dc, "printing", False):
             name_size = dc.GetTextExtent(self.Name)
@@ -993,8 +993,8 @@ class SFC_Transition(Graphic_Element, DebugDataConsumer):
             dc.SetPen(MiterPen(wx.BLUE))
             dc.SetBrush(wx.BLUE_BRUSH)
         else:
-            dc.SetPen(MiterPen(wx.BLACK))
-            dc.SetBrush(wx.BLACK_BRUSH)
+            dc.SetPen(MiterPen(ELEMENT_INK))
+            dc.SetBrush(ELEMENT_INK_BRUSH)
 
         if getattr(dc, "printing", False):
             if self.Type != "connection":
@@ -1484,8 +1484,8 @@ class SFC_Divergence(Graphic_Element):
             dc.SetPen(MiterPen(wx.GREEN))
             dc.SetBrush(wx.GREEN_BRUSH)
         else:
-            dc.SetPen(MiterPen(wx.BLACK))
-            dc.SetBrush(wx.BLACK_BRUSH)
+            dc.SetPen(MiterPen(ELEMENT_INK))
+            dc.SetBrush(ELEMENT_INK_BRUSH)
         # Draw plain rectangle for representing the divergence
         if self.Type in [SELECTION_DIVERGENCE, SELECTION_CONVERGENCE]:
             dc.DrawRectangle(self.Pos.x, self.Pos.y, self.Size[0] + 1, self.Size[1] + 1)
@@ -1751,8 +1751,8 @@ class SFC_Jump(Graphic_Element):
             dc.SetPen(MiterPen(wx.GREEN))
             dc.SetBrush(wx.GREEN_BRUSH)
         else:
-            dc.SetPen(MiterPen(wx.BLACK))
-            dc.SetBrush(wx.BLACK_BRUSH)
+            dc.SetPen(MiterPen(ELEMENT_INK))
+            dc.SetBrush(ELEMENT_INK_BRUSH)
 
         if getattr(dc, "printing", False):
             target_size = dc.GetTextExtent(self.Target)
@@ -2017,8 +2017,8 @@ class SFC_ActionBlock(Graphic_Element):
         if self.Value:
             dc.SetPen(MiterPen(wx.GREEN))
         else:
-            dc.SetPen(MiterPen(wx.BLACK))
-        dc.SetBrush(wx.WHITE_BRUSH)
+            dc.SetPen(MiterPen(ELEMENT_INK))
+        dc.SetBrush(ELEMENT_PAPER_BRUSH)
         colsize = [self.ColSize[0], self.Size[0] - self.ColSize[0] - self.ColSize[2], self.ColSize[2]]
         # Draw plain rectangle for representing the action block
         dc.DrawRectangle(self.Pos.x, self.Pos.y, self.Size[0] + 1, self.Size[1] + 1)

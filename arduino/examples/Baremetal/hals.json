@@ -53,7 +53,7 @@
     "last_update": 0,
     "platform": "arduino:avr:leonardo",
     "source": "uno_leonardo_nano_micro_zero.cpp",
-    "version": "0"
+    "version": "1.8.4"
   },
   "Arduino Mega": {
     "core": "arduino:avr",
@@ -64,7 +64,7 @@
     "last_update": 0,
     "platform": "arduino:avr:mega",
     "source": "mega_due.cpp",
-    "version": "0"
+    "version": "1.8.4"
   },
   "Arduino Micro": {
     "core": "arduino:avr",
@@ -75,7 +75,7 @@
     "last_update": 0,
     "platform": "arduino:avr:micro",
     "source": "uno_leonardo_nano_micro_zero.cpp",
-    "version": "0"
+    "version": "1.8.4"
   },
   "Arduino Nano": {
     "core": "arduino:avr",
@@ -86,7 +86,7 @@
     "last_update": 0,
     "platform": "arduino:avr:nano",
     "source": "uno_leonardo_nano_micro_zero.cpp",
-    "version": "0"
+    "version": "1.8.4"
   },
   "Arduino Nano ESP32 (Espressif-Core)": {
     "aliases": [
@@ -104,7 +104,7 @@
     "last_update": 0,
     "platform": "esp32:esp32:nano_nora",
     "source": "esp32.cpp",
-    "version": "0"
+    "version": "2.0.15"
   },
   "Arduino Opta": {
     "core": "arduino:mbed_opta",
@@ -127,7 +127,7 @@
     "last_update": 0,
     "platform": "arduino:avr:uno",
     "source": "uno_leonardo_nano_micro_zero.cpp",
-    "version": "0"
+    "version": "1.8.4"
   },
   "Arduino Uno R4": {
     "core": "arduino:renesas_uno",
@@ -387,7 +387,7 @@
     "last_update": 0,
     "platform": "arduino:avr:nano",
     "source": "uno_leonardo_nano_micro_zero.cpp",
-    "version": "0"
+    "version": "1.8.4"
   },
   "Canaduino RP2040 PLC-100": {
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
@@ -426,7 +426,7 @@
     "last_update": 0,
     "platform": "esp32:esp32:esp32:UploadSpeed=230400",
     "source": "esp32.cpp",
-    "version": "0"
+    "version": "2.0.15"
   },
   "ESP32 WROOM": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
@@ -448,7 +448,7 @@
     "last_update": 0,
     "platform": "esp32:esp32:esp32:UploadSpeed=230400",
     "source": "esp32.cpp",
-    "version": "0"
+    "version": "2.0.15"
   },
   "ESP32 WROVER": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
@@ -470,7 +470,7 @@
     "last_update": 0,
     "platform": "esp32:esp32:esp32wrover:UploadSpeed=230400,PartitionScheme=huge_app,FlashMode=qio,FlashFreq=40",
     "source": "esp32.cpp",
-    "version": "0"
+    "version": "2.0.15"
   },
   "ESP32-C3": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
@@ -492,7 +492,7 @@
     "last_update": 0,
     "platform": "esp32:esp32:esp32c3",
     "source": "esp32.cpp",
-    "version": "0"
+    "version": "2.0.15"
   },
   "ESP32-C6-DevKitC-1 V1.2": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
@@ -514,7 +514,7 @@
     "last_update": 0,
     "platform": "esp32:esp32:esp32c6",
     "source": "esp32.cpp",
-    "version": "0"
+    "version": "2.0.15"
   },
   "ESP32-DOIT DEVKIT V1": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
@@ -536,7 +536,7 @@
     "last_update": 0,
     "platform": "esp32:esp32:esp32doit-devkit-v1",
     "source": "esp32.cpp",
-    "version": "0"
+    "version": "2.0.15"
   },
   "ESP32-S2": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
@@ -558,7 +558,7 @@
     "last_update": 0,
     "platform": "esp32:esp32:esp32s2",
     "source": "esp32.cpp",
-    "version": "0"
+    "version": "2.0.15"
   },
   "ESP32-S3": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
@@ -580,7 +580,7 @@
     "last_update": 0,
     "platform": "esp32:esp32:esp32s3",
     "source": "esp32.cpp",
-    "version": "0"
+    "version": "2.0.15"
   },
   "ESP8266 D1-mini": {
     "board_manager_url": "https://arduino.esp8266.com/stable/package_esp8266com_index.json",
@@ -598,7 +598,7 @@
     "last_update": 0,
     "platform": "esp8266:esp8266:d1_mini",
     "source": "esp8266.cpp",
-    "version": "0"
+    "version": "3.1.2"
   },
   "ESP8266 NodeMCU": {
     "board_manager_url": "https://arduino.esp8266.com/stable/package_esp8266com_index.json",
@@ -616,7 +616,7 @@
     "last_update": 0,
     "platform": "esp8266:esp8266:nodemcuv2",
     "source": "esp8266.cpp",
-    "version": "0"
+    "version": "3.1.2"
   },
   "FX3U-14M / LE3U-14M": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -880,7 +880,7 @@
     "last_update": 0,
     "platform": "esp32:esp32:esp32doit-devkit-v1",
     "source": "sequent_esp32.cpp",
-    "version": "0"
+    "version": "2.0.15"
   },
   "STM32-F446ZET (NUCLEO)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",

@@ -45,11 +45,51 @@ def AddBitmapFolder(path):
         BitmapFolders.append(path)
 
 
+def DarkenIfLightMono(img):
+    """Repaint a light, near-grayscale glyph dark so it stays visible on the
+    light toolbar/chrome. White-on-dark line icons would otherwise vanish.
+    Colored icons (run=green, stop=red, …) are detected by saturation and left
+    untouched. Edits the wx.Image in place; alpha (the glyph shape) is kept."""
+    try:
+        if not img.IsOk() or not img.HasAlpha():
+            return img
+        w, h = img.GetWidth(), img.GetHeight()
+        if w == 0 or h == 0:
+            return img
+        sr = sg = sb = sat = n = 0
+        step = max(1, w // 16)
+        for x in range(0, w, step):
+            for y in range(0, h, step):
+                if img.GetAlpha(x, y) <= 40:
+                    continue
+                r, g, b = img.GetRed(x, y), img.GetGreen(x, y), img.GetBlue(x, y)
+                sr += r; sg += g; sb += b
+                sat += max(r, g, b) - min(r, g, b)
+                n += 1
+        if n == 0:
+            return img
+        if (sr + sg + sb) / (3 * n) > 150 and sat / n < 45:
+            # Preserve the alpha plane (the glyph shape): SetData resets alpha,
+            # so capture it first and restore after recoloring the RGB.
+            alpha = img.GetAlpha()
+            data = bytearray(img.GetData())
+            for i in range(0, len(data), 3):
+                data[i], data[i + 1], data[i + 2] = 0x3A, 0x3D, 0x45
+            img.SetData(bytes(data))
+            if alpha is not None:
+                img.SetAlpha(alpha)
+    except Exception:
+        pass
+    return img
+
+
 def SearchBitmap(bmp_name):
     for folder in BitmapFolders:
         bmp_path = os.path.join(folder, bmp_name + ".png")
         if os.path.isfile(bmp_path):
-            return wx.Bitmap(bmp_path)
+            img = wx.Image(bmp_path)
+            DarkenIfLightMono(img)
+            return wx.Bitmap(img)
     return None
 
 

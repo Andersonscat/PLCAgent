@@ -31,6 +31,7 @@ from threading import Lock
 
 import wx
 
+import ide_theme
 from plcopen.structures import *
 from plcopen.types_enums import ComputePouName
 from PLCControler import ITEM_VAR_LOCAL, ITEM_POU, ITEM_PROGRAM, ITEM_FUNCTIONBLOCK
@@ -647,21 +648,152 @@ class Viewer(EditorPanel, DebugViewer):
         paste.Enable(self.ParentWindow.GetCopyBuffer() is not None)
 
     def _init_Editor(self, prnt):
-        self.Editor = wx.ScrolledWindow(prnt, name="Viewer",
-                                        pos=wx.Point(0, 0), size=wx.Size(0, 0),
-                                        style=wx.HSCROLL | wx.VSCROLL)
-        self.Editor.ParentWindow = self
+        if getattr(self, "_is_ld", False):
+            # LD bodies get a Siemens-style toolbar hugging the top of the
+            # network canvas (Monitoring / Zoom / Undo-Redo / Compile). Wrap the
+            # scrolled canvas + toolbar in a container shown in the splitter pane.
+            self._EditorContainer = wx.Panel(prnt)
+            toolbar = self._init_LDToolBar(self._EditorContainer)
+            self.Editor = wx.ScrolledWindow(self._EditorContainer, name="Viewer",
+                                            pos=wx.Point(0, 0), size=wx.Size(0, 0),
+                                            style=wx.HSCROLL | wx.VSCROLL)
+            self.Editor.ParentWindow = self
+            sizer = wx.BoxSizer(wx.VERTICAL)
+            sizer.Add(toolbar, 0, wx.EXPAND)
+            sizer.Add(self.Editor, 1, wx.EXPAND)
+            self._EditorContainer.SetSizer(sizer)
+        else:
+            self.Editor = wx.ScrolledWindow(prnt, name="Viewer",
+                                            pos=wx.Point(0, 0), size=wx.Size(0, 0),
+                                            style=wx.HSCROLL | wx.VSCROLL)
+            self.Editor.ParentWindow = self
+
+    def _init_LDToolBar(self, parent):
+        """Build the embedded Siemens-style LD toolbar. Icons reuse the IDE's
+        toolbar assets; actions target the ProjectController (self.ParentWindow
+        is the BeremizIDE frame) and this Viewer's own zoom."""
+        ide = self.ParentWindow
+        tb = wx.ToolBar(parent, style=wx.TB_HORIZONTAL | wx.TB_FLAT | wx.NO_BORDER)
+        tb.SetToolBitmapSize(wx.Size(20, 20))
+        try:
+            tb.SetBackgroundColour(ide_theme.CHROME_BG)
+            tb.SetForegroundColour(ide_theme.INK)
+        except Exception:
+            pass
+
+        def bmp(name):
+            try:
+                return ide._ToolBmp(name)
+            except Exception:
+                return wx.NullBitmap
+
+        self._LDToolBar = tb
+        self._ID_LD_MONITOR = wx.NewIdRef()
+        self._ID_LD_ZOOMOUT = wx.NewIdRef()
+        self._ID_LD_ZOOMRESET = wx.NewIdRef()
+        self._ID_LD_ZOOMIN = wx.NewIdRef()
+        self._ID_LD_UNDO = wx.NewIdRef()
+        self._ID_LD_REDO = wx.NewIdRef()
+        self._ID_LD_COMPILE = wx.NewIdRef()
+
+        tb.AddTool(self._ID_LD_MONITOR, _("Monitoring"), bmp("tool_run"),
+                   _("Monitoring on/off — start/stop the simulation and show live values"))
+        tb.AddSeparator()
+        tb.AddTool(self._ID_LD_ZOOMOUT, _("Zoom out"), bmp("minus"), _("Zoom out"))
+        tb.AddTool(self._ID_LD_ZOOMRESET, _("Zoom 100%"), bmp("fit"), _("Reset zoom to 100%"))
+        tb.AddTool(self._ID_LD_ZOOMIN, _("Zoom in"), bmp("plus"), _("Zoom in"))
+        tb.AddSeparator()
+        tb.AddTool(self._ID_LD_UNDO, _("Undo"), bmp("tool_undo"), _("Undo last change"))
+        tb.AddTool(self._ID_LD_REDO, _("Redo"), bmp("tool_redo"), _("Redo"))
+        tb.AddSeparator()
+        tb.AddTool(self._ID_LD_COMPILE, _("Compile"), bmp("tool_verify"),
+                   _("Compile and check for errors (download to device)"))
+
+        self.Bind(wx.EVT_MENU, self.OnLDMonitorTool, id=self._ID_LD_MONITOR)
+        self.Bind(wx.EVT_MENU, self.OnLDZoomOutTool, id=self._ID_LD_ZOOMOUT)
+        self.Bind(wx.EVT_MENU, self.OnLDZoomResetTool, id=self._ID_LD_ZOOMRESET)
+        self.Bind(wx.EVT_MENU, self.OnLDZoomInTool, id=self._ID_LD_ZOOMIN)
+        self.Bind(wx.EVT_MENU, self.OnLDUndoTool, id=self._ID_LD_UNDO)
+        self.Bind(wx.EVT_MENU, self.OnLDRedoTool, id=self._ID_LD_REDO)
+        self.Bind(wx.EVT_MENU, self.OnLDCompileTool, id=self._ID_LD_COMPILE)
+
+        self._ld_monitoring = False
+        tb.Realize()
+        return tb
+
+    # ---- embedded LD toolbar handlers --------------------------------------
+
+    def _LD_CTR(self):
+        """ProjectController (has _Build/_Run/_Stop). None if no project."""
+        return getattr(self.ParentWindow, "CTR", None)
+
+    def OnLDMonitorTool(self, event):
+        ctr = self._LD_CTR()
+        if ctr is None:
+            return
+        try:
+            if not self._ld_monitoring:
+                ctr._Run()
+                self._ld_monitoring = True
+                self._LDToolBar.SetToolNormalBitmap(self._ID_LD_MONITOR, self.ParentWindow._ToolBmp("tool_stop"))
+            else:
+                ctr._Stop()
+                self._ld_monitoring = False
+                self._LDToolBar.SetToolNormalBitmap(self._ID_LD_MONITOR, self.ParentWindow._ToolBmp("tool_run"))
+        except Exception:
+            pass
+
+    def OnLDZoomInTool(self, event):
+        self.SetScale(self.CurrentScale + 1)
+
+    def OnLDZoomOutTool(self, event):
+        self.SetScale(self.CurrentScale - 1)
+
+    def OnLDZoomResetTool(self, event):
+        try:
+            self.SetScale(ZOOM_FACTORS.index(1.0))
+        except ValueError:
+            self.SetScale(len(ZOOM_FACTORS) // 2)
+
+    def OnLDUndoTool(self, event):
+        if hasattr(self.ParentWindow, "OnUndoMenu"):
+            self.ParentWindow.OnUndoMenu(event)
+
+    def OnLDRedoTool(self, event):
+        if hasattr(self.ParentWindow, "OnRedoMenu"):
+            self.ParentWindow.OnRedoMenu(event)
+
+    def OnLDCompileTool(self, event):
+        ctr = self._LD_CTR()
+        if ctr is not None:
+            try:
+                ctr._Build()
+            except Exception:
+                pass
 
     # Create a new Viewer
     def __init__(self, parent, tagname, window, controler, debug=False, instancepath=""):
-        self.VARIABLE_PANEL_TYPE = controler.GetPouType(tagname.split("::")[1])
+        # plc-cursor: LD POUs hide the variable declaration table (Siemens has
+        # no such grid above the network canvas). Variables are managed by the
+        # AI agent via add_pou_variable, so the grid is redundant here. Other
+        # graphical bodies (FBD/SFC) keep their interface panel.
+        _body_type = None
+        try:
+            _body_type = controler.GetEditedElementBodyType(tagname)
+        except Exception:
+            _body_type = None
+        self._is_ld = (_body_type == "LD") and not debug
+        if self._is_ld:
+            self.VARIABLE_PANEL_TYPE = None
+        else:
+            self.VARIABLE_PANEL_TYPE = controler.GetPouType(tagname.split("::")[1])
 
         EditorPanel.__init__(self, parent, tagname, window, controler, debug)
         DebugViewer.__init__(self, controler, debug)
 
         # Adding a rubberband to Viewer
         self.rubberBand = RubberBand(viewer=self)
-        self.Editor.SetBackgroundColour(wx.Colour(255, 255, 255))
+        self.Editor.SetBackgroundColour(ide_theme.CANVAS_BG)
         self.Editor.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
         self.ResetView()
         self.LastClientSize = None
@@ -1121,7 +1253,7 @@ class Viewer(EditorPanel, DebugViewer):
                 dc = wx.MemoryDC(bitmap)
                 dc.SetBackground(wx.Brush(self.Editor.GetBackgroundColour()))
                 dc.Clear()
-                dc.SetPen(MiterPen(wx.Colour(180, 180, 180)))
+                dc.SetPen(MiterPen(ide_theme.CANVAS_GRID_DOT))
                 dc.DrawPoint(0, 0)
                 self.GridBrush = wx.Brush(bitmap)
             else:
@@ -1132,7 +1264,7 @@ class Viewer(EditorPanel, DebugViewer):
         page_size = properties["pageSize"]
         if page_size != (0, 0):
             self.PageSize = list(map(int, page_size))
-            self.PagePen = MiterPen(wx.Colour(180, 180, 180))
+            self.PagePen = MiterPen(ide_theme.CANVAS_BORDER)
         else:
             self.PageSize = None
             self.PagePen = wx.TRANSPARENT_PEN

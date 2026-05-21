@@ -55,8 +55,8 @@ class FBD_Block(Graphic_Element):
         self.SetExecutionOrder(executionOrder)
         self.Inputs = []
         self.Outputs = []
-        self.Colour = wx.BLACK
-        self.Pen = MiterPen(wx.BLACK)
+        self.Colour = ELEMENT_INK
+        self.Pen = MiterPen(ELEMENT_INK)
         self.SetType(type, extension, inputs, connectors, executionControl)
         self.Highlights = {}
 
@@ -248,7 +248,7 @@ class FBD_Block(Graphic_Element):
             # inputs and outputs
             blocktype = self.Parent.GetBlockType(type, inputs)
             if blocktype:
-                self.Colour = wx.BLACK
+                self.Colour = ELEMENT_INK
                 inputs = [input for input in blocktype["inputs"]]
                 outputs = [output for output in blocktype["outputs"]]
                 if blocktype["extensible"]:
@@ -462,7 +462,7 @@ class FBD_Block(Graphic_Element):
     def Draw(self, dc):
         Graphic_Element.Draw(self, dc)
         dc.SetPen(self.Pen)
-        dc.SetBrush(wx.WHITE_BRUSH)
+        dc.SetBrush(ELEMENT_PAPER_BRUSH)
         dc.SetTextForeground(self.Colour)
 
         if getattr(dc, "printing", False):
@@ -766,9 +766,9 @@ class FBD_Variable(Graphic_Element):
     # Draws variable
     def Draw(self, dc):
         Graphic_Element.Draw(self, dc)
-        dc.SetPen(MiterPen(wx.BLACK))
-        dc.SetBrush(wx.WHITE_BRUSH)
-        dc.SetTextForeground(wx.BLACK)
+        dc.SetPen(MiterPen(ELEMENT_INK))
+        dc.SetBrush(ELEMENT_PAPER_BRUSH)
+        dc.SetTextForeground(ELEMENT_INK)
 
         if getattr(dc, "printing", False):
             name_size = dc.GetTextExtent(self.Name)
@@ -1007,9 +1007,9 @@ class FBD_Connector(Graphic_Element):
     # Draws connection
     def Draw(self, dc):
         Graphic_Element.Draw(self, dc)
-        dc.SetPen(MiterPen(wx.BLACK))
-        dc.SetBrush(wx.WHITE_BRUSH)
-        dc.SetTextForeground(wx.BLACK)
+        dc.SetPen(MiterPen(ELEMENT_INK))
+        dc.SetBrush(ELEMENT_PAPER_BRUSH)
+        dc.SetTextForeground(ELEMENT_INK)
 
         if getattr(dc, "printing", False):
             name_size = dc.GetTextExtent(self.Name)

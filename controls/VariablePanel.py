@@ -29,6 +29,7 @@ import wx
 import wx.grid
 import wx.lib.buttons
 
+import ide_theme
 from plcopen.structures import LOCATIONDATATYPES, TestIdentifier, IEC_KEYWORDS, DefaultType
 from plcopen.VariableInfoCollector import _VariableInfos
 from graphics.GraphicCommons import REFRESH_HIGHLIGHT_PERIOD, ERROR_HIGHLIGHT
@@ -234,7 +235,8 @@ class VariableTable(CustomTable):
                 if colname == "Location" and LOCATION_MODEL.match(self.GetValueByName(row, colname)) is None:
                     highlight_colours = ERROR_HIGHLIGHT
                 else:
-                    highlight_colours = row_highlights.get(colname.lower(), [(wx.WHITE, wx.BLACK)])[-1]
+                    # Zebra striping by row parity; explicit highlights still win.
+                    highlight_colours = row_highlights.get(colname.lower(), [ide_theme.row_base_colours(row)])[-1]
                 grid.SetCellBackgroundColour(row, col, highlight_colours[0])
                 grid.SetCellTextColour(row, col, highlight_colours[1])
             self.ResizeRow(grid, row)
@@ -441,6 +443,7 @@ class VariablePanel(wx.Panel):
 
     def __init__(self, parent, window, controler, element_type, debug=False):
         wx.Panel.__init__(self, parent, style=wx.TAB_TRAVERSAL)
+        self.SetBackgroundColour(ide_theme.PANEL_BG)
 
         self.VARIABLE_CHOICES_DICT = dict([(_(_class), _class) for
                                            _class in GetFilterChoiceTransfer().keys()])

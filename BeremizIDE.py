@@ -25,6 +25,7 @@
 
 
 import os
+import json
 import pickle
 import sys
 import shutil
@@ -38,6 +39,7 @@ import wx.lib.buttons
 import wx.lib.statbmp
 import wx.stc
 import wx.adv
+import wx.aui
 
 
 import version
@@ -46,6 +48,7 @@ from editors.Viewer import Viewer
 from editors.TextViewer import TextViewer
 from editors.ResourceEditor import ConfigurationEditor, ResourceEditor
 from editors.DataTypeEditor import DataTypeEditor
+import ide_theme
 from util.paths import Bpath
 from util.MiniTextControler import MiniTextControler
 from util.BitmapLibrary import GetBitmap
@@ -399,11 +402,22 @@ class Beremiz(IDEFrame, LocalRuntimeMixin):
         self.LogConsole.SetReadOnly(True)
         self.LogConsole.SetWrapMode(wx.stc.STC_WRAP_CHAR)
 
-        # Define Log Console styles
-        self.LogConsole.StyleSetSpec(wx.stc.STC_STYLE_DEFAULT, "face:%(mono)s,size:%(size)d" % faces)
+        # Define Log Console styles — light-modern console (soft bg, dark ink,
+        # gentler error red, amber-ish highlight instead of harsh yellow).
+        console_faces = dict(faces)
+        console_faces.update(bg=ide_theme.CONSOLE_BG_HEX,
+                             fg=ide_theme.CONSOLE_FG_HEX,
+                             err=ide_theme.CONSOLE_ERR_HEX,
+                             warn=ide_theme.CONSOLE_WARN_HEX)
+        self.LogConsole.StyleSetSpec(
+            wx.stc.STC_STYLE_DEFAULT,
+            "face:%(mono)s,size:%(size)d,back:%(bg)s,fore:%(fg)s" % console_faces)
         self.LogConsole.StyleClearAll()
-        self.LogConsole.StyleSetSpec(1, "face:%(mono)s,fore:#FF0000,size:%(size)d" % faces)
-        self.LogConsole.StyleSetSpec(2, "face:%(mono)s,fore:#FF0000,back:#FFFF00,size:%(size)d" % faces)
+        self.LogConsole.StyleSetSpec(
+            1, "face:%(mono)s,size:%(size)d,back:%(bg)s,fore:%(err)s" % console_faces)
+        self.LogConsole.StyleSetSpec(
+            2, "face:%(mono)s,size:%(size)d,back:%(warn)s,fore:%(err)s" % console_faces)
+        self.LogConsole.SetCaretForeground(ide_theme.INK)
 
         # Define Log Console markers
         self.LogConsole.SetMarginSensitive(1, True)
@@ -425,17 +439,35 @@ class Beremiz(IDEFrame, LocalRuntimeMixin):
         self.BottomNoteBook.AddPage(*self.MainTabs["LogViewer"])
         # self.BottomNoteBook.Split(self.BottomNoteBook.GetPageIndex(self.LogViewer), wx.RIGHT)
 
+        self._build_tia_inspector()
+
+        # Uniform icon-only toolbar (single clean row, all icons on one
+        # baseline). wxPython/macOS can't render labels *beside* icons
+        # (TB_HORZ_LAYOUT is ignored and text stacks below, making the row
+        # ragged), so labels live in tooltips — the professional look
+        # achievable here.
+        # Label under every tool (uniform — all buttons same icon+caption
+        # height, so the row stays even). TB_TEXT shows the label; on macOS it
+        # renders below the icon.
         StatusToolBar = wx.ToolBar(self, -1, wx.DefaultPosition, wx.DefaultSize,
-                                   wx.TB_FLAT | wx.TB_HORIZONTAL | wx.NO_BORDER)
-        StatusToolBar.SetToolBitmapSize(wx.Size(25, 25))
+                                   wx.TB_FLAT | wx.TB_HORIZONTAL | wx.NO_BORDER | wx.TB_NODIVIDER)
+        # Compact, professional icon-only toolbar (TIA/VS Code style): small
+        # crisp dark icons, names in tooltips. macOS can't colour native toolbar
+        # text and labels-under-icons make the row sparse/oversized, so no TB_TEXT.
+        StatusToolBar.SetToolBitmapSize(wx.Size(22, 22))
+        StatusToolBar.SetBackgroundColour(ide_theme.CHROME_BG)
+        StatusToolBar.SetForegroundColour(ide_theme.INK)
         StatusToolBar.Realize()
         self.Panes["StatusToolBar"] = StatusToolBar
         self.AUIManager.AddPane(StatusToolBar, wx.aui.AuiPaneInfo().
                                 Name("StatusToolBar").Caption(_("Status ToolBar")).
                                 ToolbarPane().Top().Position(1).
+                                Gripper(False).Movable(False).Floatable(False).
                                 LeftDockable(False).RightDockable(False))
 
         self.AUIManager.Update()
+
+        self._build_html_toolbar()
 
         self.ConnectionStatusBar = esb.EnhancedStatusBar(self, style=wx.STB_SIZEGRIP)
         self._init_coll_ConnectionStatusBar_Fields(self.ConnectionStatusBar)
@@ -468,6 +500,19 @@ class Beremiz(IDEFrame, LocalRuntimeMixin):
 
         IDEFrame.__init__(self, parent, debug)
         self.Log = LogPseudoFile(self.LogConsole, self.SelectTab, logf)
+
+        # Tee build/compile/log output into the unified inspector's Info section.
+        _insp = getattr(self, "InspectorPanel", None)
+        if _insp is not None:
+            _orig_log_write = self.Log.write
+
+            def _tee_log(s, style=None, _o=_orig_log_write, _p=_insp):
+                _o(s, style)
+                try:
+                    wx.CallAfter(_p.append_log, s, style)
+                except Exception:
+                    pass
+            self.Log.write = _tee_log
 
         LocalRuntimeMixin.__init__(self, self.Log)
 
@@ -754,34 +799,290 @@ class Beremiz(IDEFrame, LocalRuntimeMixin):
                 if callback is not None:
                     self.Bind(wx.EVT_MENU, callback, id=id)
 
+    def _build_html_toolbar(self):
+        """Custom HTML engineering toolbar replacing the native wx toolbars."""
+        try:
+            from ai.toolbar_panel import ToolbarPanel
+        except Exception as exc:
+            print(f"[toolbar] HTML toolbar unavailable: {exc}", file=sys.stderr)
+            return
+        try:
+            self.HtmlToolbar = ToolbarPanel(self, self._on_toolbar_action)
+            self.AUIManager.AddPane(
+                self.HtmlToolbar,
+                wx.aui.AuiPaneInfo().Name("HtmlToolbar").CaptionVisible(False)
+                .Top().Layer(10).Row(0).Position(0)
+                .Gripper(False).Movable(False).Floatable(False).Resizable(False)
+                .CloseButton(False).DockFixed(True)
+                .MinSize(wx.Size(-1, ToolbarPanel.HEIGHT))
+                .BestSize(wx.Size(1400, ToolbarPanel.HEIGHT)))
+            for nm in ("MenuToolBar", "EditorToolBar", "StatusToolBar"):
+                p = self.AUIManager.GetPane(nm)
+                if p.IsOk():
+                    p.Hide()
+            self._apply_aui_theme()
+            self.AUIManager.Update()
+            wx.CallAfter(self._update_toolbar_enabled)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
+    def _on_toolbar_action(self, action, msg):
+        if action == "search":
+            self._toolbar_search(msg.get("q", ""))
+            return
+        frame_handlers = {
+            "new": self.OnNewProjectMenu, "open": self.OnOpenProjectMenu,
+            "save": self.OnSaveProjectMenu, "print": self.OnPrintMenu,
+            "cut": self.OnCutMenu, "copy": self.OnCopyMenu,
+            "paste": self.OnPasteMenu, "delete": self.OnDeleteMenu,
+            "undo": self.OnUndoMenu, "redo": self.OnRedoMenu,
+        }
+        ctr_methods = {
+            "build": "_Build", "clean": "_Clean", "ieccode": "_showIECcode",
+            "connect": "_Connect", "transfer": "_Transfer", "run": "_Run",
+            "stop": "_Stop", "disconnect": "_Disconnect",
+            "generate": "_generateOpenPLC", "upload": "_generateArduino",
+            "debug": "_debugPLC",
+        }
+        try:
+            if action in frame_handlers:
+                frame_handlers[action](wx.CommandEvent())
+            elif action in ctr_methods and self.CTR is not None:
+                m = getattr(self.CTR, ctr_methods[action], None)
+                if m:
+                    m()
+        except Exception as exc:
+            print(f"[toolbar] action {action!r} failed: {exc}", file=sys.stderr)
+        wx.CallAfter(self._update_toolbar_enabled)
+
+    def _toolbar_search(self, text):
+        text = (text or "").strip()
+        if self.CTR is None or not text:
+            return
+        criteria = {"find_pattern": text, "case_sensitive": False,
+                    "regular_expression": False}
+        try:
+            result = self.Controler.SearchInProject(criteria)
+            self.ClearSearchResults()
+            self.SearchResultPanel.SetSearchResults(criteria, result)
+            self.SelectTab(self.SearchResultPanel)
+        except Exception:
+            pass
+
+    def _update_toolbar_enabled(self):
+        tb = getattr(self, "HtmlToolbar", None)
+        if tb is None:
+            return
+        has = self.CTR is not None
+        en = {a: has for a in (
+            "save", "print", "cut", "copy", "paste", "delete", "undo", "redo",
+            "build", "clean", "ieccode", "connect", "transfer", "run", "stop",
+            "disconnect", "generate", "upload", "debug")}
+        try:
+            tb.webview.RunScript("try{setEnabled(" + json.dumps(en) + ")}catch(e){}")
+        except Exception:
+            pass
+
     def RefreshEditorToolBar(self):
         IDEFrame.RefreshEditorToolBar(self)
+        if getattr(self, "HtmlToolbar", None) is not None:
+            p = self.AUIManager.GetPane("EditorToolBar")
+            if p.IsOk():
+                p.Hide()
+            self._apply_aui_theme()
+            self.AUIManager.Update()
+            return
         self.AUIManager.GetPane("EditorToolBar").Position(2)
         self.AUIManager.GetPane("StatusToolBar").Position(1)
+        self._apply_aui_theme()
         self.AUIManager.Update()
 
+    def _ToolBmp(self, name):
+        """Load a toolbar icon. Prefer the custom vector set (crisp, modern,
+        consistent); fall back to the bundled PNG (recoloured) otherwise."""
+        try:
+            from ai.toolbar_icons import get_toolbar_icon
+            custom = get_toolbar_icon(name, size=20)
+            if custom is not None:
+                return custom
+        except Exception:
+            pass
+        path = Bpath("images", name + ".png")
+        if os.path.exists(path):
+            img = wx.Image(path)
+            from util.BitmapLibrary import DarkenIfLightMono
+            DarkenIfLightMono(img)
+            bmp = wx.Bitmap(img)
+            if img.GetWidth() >= 40:
+                try:
+                    bmp.SetScaleFactor(2.0)
+                except Exception:
+                    pass
+            return bmp
+        return GetBitmap(name)
+
+    # Fixed footprint (logical px) for a labelled toolbar button (icon over
+    # caption). The caption is painted into the bitmap in dark ink so it stays
+    # readable on the light toolbar — macOS ignores ToolBar.SetForegroundColour
+    # for native text. Rendered at 2x and tagged HiDPI so it's crisp on Retina.
+    _TB_W, _TB_H = 78, 44
+
+    def _ToolBmpLabeled(self, name, label):
+        S = 2                                  # render at 2x device pixels
+        W, H = self._TB_W * S, self._TB_H * S
+        ICON = 20 * S                          # native icon size (assets are 40px)
+        gap = 3 * S
+
+        out = wx.Bitmap(W, H)
+        dc = wx.MemoryDC(out)
+        dc.SetBackground(wx.Brush(ide_theme.CHROME_BG))
+        dc.Clear()
+
+        try:
+            img = self._ToolBmp(name).ConvertToImage().Scale(ICON, ICON, wx.IMAGE_QUALITY_HIGH)
+            icbmp = wx.Bitmap(img)
+        except Exception:
+            icbmp = self._ToolBmp(name)
+
+        px = 11 * S                            # label height in device px
+        font = wx.Font(wx.FontInfo(wx.Size(0, px)))
+        dc.SetFont(font)
+        tw, th = dc.GetTextExtent(label)
+        while tw > W - 4 * S and px > 8 * S:    # shrink overly long captions
+            px -= S
+            font = wx.Font(wx.FontInfo(wx.Size(0, px)))
+            dc.SetFont(font)
+            tw, th = dc.GetTextExtent(label)
+
+        # Vertically centre the icon + gap + caption group (no "levitating").
+        total = ICON + gap + th
+        top = max(0, (H - total) // 2)
+        dc.DrawBitmap(icbmp, (W - ICON) // 2, top, True)
+        dc.SetTextForeground(ide_theme.INK)
+        dc.DrawText(label, max(0, (W - tw) // 2), top + ICON + gap)
+        dc.SelectObject(wx.NullBitmap)
+
+        try:
+            out.SetScaleFactor(float(S))        # tag as 2x → crisp at logical size
+        except Exception:
+            pass
+        return out
+
     def RefreshStatusToolBar(self):
+        # The HTML toolbar replaces the native StatusToolBar — keep it hidden
+        # and just refresh the HTML toolbar's enabled state.
+        if getattr(self, "HtmlToolbar", None) is not None:
+            p = self.AUIManager.GetPane("StatusToolBar")
+            if p.IsOk():
+                p.Hide()
+            self._update_toolbar_enabled()
+            self.AUIManager.Update()
+            return
         StatusToolBar = self.Panes["StatusToolBar"]
         StatusToolBar.ClearTools()
         StatusToolBar.SetMinSize(StatusToolBar.GetToolBitmapSize())
 
-        if self.CTR is not None:
+        # The inline search control is re-created on every refresh; drop the
+        # previous one so it doesn't leak / duplicate.
+        old_search = getattr(self, "ToolbarSearch", None)
+        if old_search:
+            try:
+                old_search.Destroy()
+            except Exception:
+                pass
+            self.ToolbarSearch = None
 
-            for confnode_method in self.CTR.StatusMethods:
-                if "method" in confnode_method and confnode_method.get("shown", True):
-                    tool = StatusToolBar.AddTool(
-                        wx.ID_ANY, confnode_method["name"],
-                        GetBitmap(confnode_method.get("bitmap", "Unknown")),
-                        confnode_method["tooltip"])
-                    self.Bind(wx.EVT_MENU, self.GetMenuCallBackFunction(confnode_method["method"]), tool)
+        if self.CTR is not None:
+            # Full TIA-Portal-style engineering toolbar, grouped left->right by
+            # the engineer's workflow. Every tool has a short caption (1st tuple
+            # item) shown under its icon. "frame" targets are IDEFrame methods;
+            # "ctr" targets are ProjectController methods.
+            TB_GROUPS = [
+                # File
+                [(_("New"),      "tool_new",      _("New project"),                                "frame", self.OnNewProjectMenu),
+                 (_("Open"),     "tool_open",     _("Open project"),                               "frame", self.OnOpenProjectMenu),
+                 (_("Save"),     "tool_save",     _("Save project"),                               "frame", self.OnSaveProjectMenu),
+                 (_("Print"),    "tool_print",    _("Print"),                                      "frame", self.OnPrintMenu)],
+                # Edit
+                [(_("Cut"),      "tool_cut",      _("Cut"),                                        "frame", self.OnCutMenu),
+                 (_("Copy"),     "tool_copy",     _("Copy"),                                       "frame", self.OnCopyMenu),
+                 (_("Paste"),    "tool_paste",    _("Paste"),                                      "frame", self.OnPasteMenu),
+                 (_("Delete"),   "tool_delete",   _("Delete"),                                     "frame", self.OnDeleteMenu)],
+                # Undo / Redo
+                [(_("Undo"),     "tool_undo",     _("Undo last change"),                           "frame", self.OnUndoMenu),
+                 (_("Redo"),     "tool_redo",     _("Redo"),                                       "frame", self.OnRedoMenu)],
+                # Build
+                [(_("Verify"),   "tool_verify",   _("Compile and check for errors"),               "ctr",   "_Build"),
+                 (_("Clean"),    "tool_clean",    _("Clean the build folder"),                     "ctr",   "_Clean"),
+                 (_("IEC code"), "tool_ieccode",  _("Show generated IEC 61131-3 code"),            "ctr",   "_showIECcode")],
+                # Online / run lifecycle
+                [(_("Go online"),"tool_online",   _("Connect to the target PLC"),                  "ctr",   "_Connect"),
+                 (_("Download"), "tool_download", _("Download program to the PLC"),                "ctr",   "_Transfer"),
+                 (_("Run"),      "tool_run",      _("Start PLC (local simulation)"),               "ctr",   "_Run"),
+                 (_("Stop"),     "tool_stop",     _("Stop the running PLC"),                       "ctr",   "_Stop"),
+                 (_("Go offline"),"tool_offline", _("Disconnect from the PLC"),                    "ctr",   "_Disconnect")],
+                # Deploy to firmware
+                [(_("Generate"), "tool_generate", _("Compile and generate program for OpenPLC Runtime"), "ctr", "_generateOpenPLC"),
+                 (_("Upload"),   "tool_upload",   _("Compile and upload to an Arduino-class PLC"), "ctr",   "_generateArduino")],
+                # Debug
+                [(_("Debug"),    "tool_debug",    _("Live-debug the running PLC"),                 "ctr",   "_debugPLC")],
+            ]
+            for group in TB_GROUPS:
+                StatusToolBar.AddSeparator()
+                for label, bitmap, tooltip, kind, target in group:
+                    tool = StatusToolBar.AddTool(wx.ID_ANY, label, self._ToolBmp(bitmap), tooltip)
+                    if kind == "frame":
+                        self.Bind(wx.EVT_MENU, target, tool)
+                    else:
+                        self.Bind(wx.EVT_MENU, self.GetMenuCallBackFunction(target), tool)
+
+            # Inline "Search in project" field on the right (TIA-style).
+            StatusToolBar.AddSeparator()
+            search = wx.SearchCtrl(StatusToolBar, size=wx.Size(180, -1),
+                                   style=wx.TE_PROCESS_ENTER)
+            search.SetDescriptiveText(_("Search in project"))
+            search.ShowSearchButton(True)
+            search.ShowCancelButton(True)
+            search.Bind(wx.EVT_TEXT_ENTER, self.OnToolbarSearch)
+            search.Bind(wx.EVT_SEARCHCTRL_SEARCH_BTN, self.OnToolbarSearch)
+            self.ToolbarSearch = search
+            StatusToolBar.AddControl(search)
 
             StatusToolBar.Realize()
             self.AUIManager.GetPane("StatusToolBar").BestSize(StatusToolBar.GetBestSize()).Show()
         else:
-            self.AUIManager.GetPane("StatusToolBar").Hide()
+            # No project open: minimal toolbar with New / Open (labelled, since
+            # the bar would otherwise be empty) so the user can get started.
+            for label, bitmap, tooltip, handler in [
+                (_("New project"),  "tool_new",  _("New project"),  self.OnNewProjectMenu),
+                (_("Open project"), "tool_open", _("Open project"), self.OnOpenProjectMenu),
+            ]:
+                tool = StatusToolBar.AddTool(wx.ID_ANY, label, self._ToolBmp(bitmap), tooltip)
+                self.Bind(wx.EVT_MENU, handler, tool)
+            StatusToolBar.Realize()
+            self.AUIManager.GetPane("StatusToolBar").BestSize(StatusToolBar.GetBestSize()).Show()
         self.AUIManager.GetPane("EditorToolBar").Position(2)
         self.AUIManager.GetPane("StatusToolBar").Position(1)
+        self._apply_aui_theme()
         self.AUIManager.Update()
+
+    def OnToolbarSearch(self, event):
+        """Run a project-wide search from the inline toolbar field."""
+        if self.CTR is None or getattr(self, "ToolbarSearch", None) is None:
+            return
+        text = self.ToolbarSearch.GetValue().strip()
+        if not text:
+            return
+        criteria = {"find_pattern": text, "case_sensitive": False,
+                    "regular_expression": False}
+        try:
+            result = self.Controler.SearchInProject(criteria)
+            self.ClearSearchResults()
+            self.SearchResultPanel.SetSearchResults(criteria, result)
+            self.SelectTab(self.SearchResultPanel)
+        except Exception:
+            pass
 
     def RefreshEditMenu(self):
         IDEFrame.RefreshEditMenu(self)
@@ -826,6 +1127,119 @@ class Beremiz(IDEFrame, LocalRuntimeMixin):
 
     def RefreshAll(self):
         self.RefreshStatusToolBar()
+
+    def _build_tia_inspector(self):
+        """Replace the bottom notebook's content with a single unified HTML
+        inspector (Properties | Info | Diagnostics, flat own tabs). The native
+        Console / PLC Log / Search widgets are removed from view; the build log
+        is teed into Info and search results are pushed there. The AUI tab bar
+        is hidden so only the inspector's own flat tabs show."""
+        try:
+            from ai.inspector_panel import UnifiedInspectorPanel
+        except Exception as exc:
+            print(f"[inspector] unavailable: {exc}", file=sys.stderr)
+            return
+        try:
+            nb = self.BottomNoteBook
+
+            # Detach the native pages (LogConsole stays alive as backing store
+            # for self.Log; it's simply no longer shown).
+            for w in (self.SearchResultPanel, self.LogConsole, self.LogViewer):
+                idx = nb.GetPageIndex(w)
+                if idx != wx.NOT_FOUND:
+                    nb.RemovePage(idx)
+                try:
+                    w.Hide()
+                except Exception:
+                    pass
+
+            # Inspector is its OWN bottom dock pane (parented to the frame), not a
+            # page inside BottomNoteBook — the AuiNotebook drew a dark border
+            # frame around it. Hide the now-empty BottomNoteBook pane.
+            self.InspectorPanel = UnifiedInspectorPanel(
+                self, project_controller_getter=lambda: getattr(self, "CTR", None),
+                active_pou_getter=self._get_active_pou_name)
+            self.AUIManager.AddPane(
+                self.InspectorPanel,
+                wx.aui.AuiPaneInfo().Name("Inspector").CaptionVisible(False)
+                .Bottom().Layer(0).Position(0).CloseButton(False).Gripper(False)
+                .Floatable(False).Movable(False)
+                .BestSize(wx.Size(1400, 280)).MinSize(wx.Size(-1, 150)))
+            # Fully remove the now-empty BottomNoteBook from AUI (Hide() alone
+            # leaves its dark empty body docked beside the inspector).
+            try:
+                self.AUIManager.DetachPane(self.BottomNoteBook)
+            except Exception:
+                pass
+            try:
+                self.BottomNoteBook.Hide()
+            except Exception:
+                pass
+
+            # Keep MainTabs / DefaultPerspective consistent.
+            for key in ("LogConsole", "LogViewer", "SearchResultPanel"):
+                self.MainTabs.pop(key, None)
+            try:
+                notebooks = {}
+                for _n, _en in [(self.LeftNoteBook, "leftnotebook"),
+                                (self.BottomNoteBook, "bottomnotebook"),
+                                (self.RightNoteBook, "rightnotebook")]:
+                    notebooks[_en] = self.SaveTabLayout(_n)
+                self.DefaultPerspective = {
+                    "perspective": self.AUIManager.SavePerspective(),
+                    "notebooks": notebooks,
+                }
+            except Exception:
+                pass
+
+            # Tee project-search results into the inspector's Info section.
+            _orig_set = self.SearchResultPanel.SetSearchResults
+            def _tee_search(criteria, results):
+                _orig_set(criteria, results)
+                try:
+                    items = []
+                    for infos, start, end, text in results:
+                        where = ".".join(str(p) for p in (infos[1:] if len(infos) > 1 else infos))
+                        items.append({"where": where or str(infos[0]), "text": text})
+                    self.InspectorPanel.set_search(items[:300])
+                except Exception:
+                    pass
+            self.SearchResultPanel.SetSearchResults = _tee_search
+
+            self.AUIManager.Update()
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
+    def _get_active_pou_name(self):
+        """POU name of the currently focused editor tab, or None."""
+        try:
+            sel = self.TabsOpened.GetSelection()
+            if sel == -1:
+                return None
+            tag = self.TabsOpened.GetPage(sel).GetTagName()
+            if not tag or tag == "__welcome__":
+                return None
+            if "::" in tag:
+                return tag.split("::")[-1]
+            return tag
+        except Exception:
+            return None
+
+    def SelectTab(self, tab):
+        """Bring a tab forward. Console / PLC Log / Search now live inside the
+        unified inspector's Info section, so route those to it."""
+        if tab in (getattr(self, "LogConsole", None),
+                   getattr(self, "LogViewer", None),
+                   getattr(self, "SearchResultPanel", None)):
+            insp = getattr(self, "InspectorPanel", None)
+            if insp is not None:
+                bidx = self.BottomNoteBook.GetPageIndex(insp)
+                if bidx != wx.NOT_FOUND:
+                    self.BottomNoteBook.SetSelection(bidx)
+                insp.show_info()
+                return
+        IDEFrame.SelectTab(self, tab)
 
     def GetMenuCallBackFunction(self, method):
         """ Generate the callbackfunc for a given CTR method"""
@@ -966,6 +1380,8 @@ class Beremiz(IDEFrame, LocalRuntimeMixin):
 
     def RefreshAfterLoad(self):
         self._Refresh(PROJECTTREE, POUINSTANCEVARIABLESPANEL, LIBRARYTREE)
+        if getattr(self, "SidebarPanel", None) is not None:
+            wx.CallAfter(self.SidebarPanel.force_refresh)
 
     def RefreshAfterSave(self):
         self.RefreshAll()
@@ -1072,9 +1488,9 @@ class Beremiz(IDEFrame, LocalRuntimeMixin):
             return IDEFrame.GetProjectElementWindow(self, element, tagname)
 
     def SelectProjectTreeItem(self, tagname):
-        if self.ProjectTree is not None:
+        if getattr(self, "ProjectTree", None) is not None:
             root = self.ProjectTree.GetRootItem()
-            if root.IsOk():
+            if root is not None and root.IsOk():
                 words = tagname.split("::")
                 if len(words) == 1:
                     if tagname == "Project":

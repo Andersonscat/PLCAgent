@@ -331,8 +331,8 @@ class LD_PowerRail(Graphic_Element):
     # Draws power rail
     def Draw(self, dc):
         Graphic_Element.Draw(self, dc)
-        dc.SetPen(MiterPen(wx.BLACK))
-        dc.SetBrush(wx.BLACK_BRUSH)
+        dc.SetPen(MiterPen(ELEMENT_INK))
+        dc.SetBrush(ELEMENT_INK_BRUSH)
         # Draw a rectangle with the power rail size
         if self.Type == LEFTRAIL:
             dc.DrawRectangle(self.Pos.x + self.Size[0] - LD_POWERRAIL_WIDTH, self.Pos.y, LD_POWERRAIL_WIDTH + 1, self.Size[1] + 1)
@@ -645,10 +645,10 @@ class LD_Contact(Graphic_Element, DebugDataConsumer):
             elif self.Forced:
                 dc.SetPen(MiterPen(wx.BLUE))
             else:
-                dc.SetPen(MiterPen(wx.BLACK))
+                dc.SetPen(MiterPen(ELEMENT_INK))
         else:
-            dc.SetPen(MiterPen(wx.BLACK))
-        dc.SetBrush(wx.BLACK_BRUSH)
+            dc.SetPen(MiterPen(ELEMENT_INK))
+        dc.SetBrush(ELEMENT_INK_BRUSH)
 
         # Compiling contact type modifier symbol
         typetext = ""
@@ -958,7 +958,7 @@ class LD_Coil(Graphic_Element):
         if self.Value is not None and self.Value:
             dc.SetPen(MiterPen(wx.GREEN, 2, wx.SOLID))
         else:
-            dc.SetPen(MiterPen(wx.BLACK, 2, wx.SOLID))
+            dc.SetPen(MiterPen(ELEMENT_INK, 2, wx.SOLID))
         dc.SetBrush(wx.TRANSPARENT_BRUSH)
 
         # Compiling coil type modifier symbol
@@ -996,7 +996,7 @@ class LD_Coil(Graphic_Element):
                 if self.Value is not None and self.Value:
                     dc.SetPen(MiterPen(wx.GREEN))
                 else:
-                    dc.SetPen(MiterPen(wx.BLACK))
+                    dc.SetPen(MiterPen(ELEMENT_INK))
                 dc.DrawPoint(self.Pos.x + 1, self.Pos.y + self.Size[1] // 2 + 1)
             name_size = self.NameSize
             if typetext != "":

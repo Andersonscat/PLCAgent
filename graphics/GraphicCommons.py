@@ -30,6 +30,19 @@ from graphics.ToolTipProducer import ToolTipProducer
 from graphics.DebugDataConsumer import DebugDataConsumer
 
 # -------------------------------------------------------------------------------
+#                          Dark-theme element palette
+#
+# Ladder/FBD/SFC elements were historically drawn black-on-white. On the
+# dark canvas these become the "ink" (outlines, text, solid shapes) and the
+# "paper" (interior fills of comments/blocks/steps). Centralised here so the
+# whole graphics package (imported with `*`) shares one source of truth.
+# -------------------------------------------------------------------------------
+
+ELEMENT_INK         = wx.Colour(28, 30, 36)      # near-black lines/text on light canvas
+ELEMENT_INK_BRUSH   = wx.Brush(wx.Colour(28, 30, 36))
+ELEMENT_PAPER_BRUSH = wx.Brush(wx.Colour(252, 252, 252))  # white element fill
+
+# -------------------------------------------------------------------------------
 #                               Common constants
 #
 #            Definition of constants for dimensions of graphic elements
@@ -247,7 +260,7 @@ def DrawHighlightedText(dc, text, highlights, x, y):
         dc.SetTextForeground(highlight_type[1])
         dc.DrawText(part, x + offset_width, y)
     dc.SetPen(current_pen)
-    dc.SetTextForeground(wx.BLACK)
+    dc.SetTextForeground(ELEMENT_INK)
 
 
 # -------------------------------------------------------------------------------
@@ -681,8 +694,8 @@ class Graphic_Element(ToolTipProducer):
             if self.Selected:
                 scalex, scaley = dc.GetUserScale()
                 dc.SetUserScale(1, 1)
-                dc.SetPen(MiterPen(wx.BLACK))
-                dc.SetBrush(wx.BLACK_BRUSH)
+                dc.SetPen(MiterPen(ELEMENT_INK))
+                dc.SetBrush(ELEMENT_INK_BRUSH)
 
                 left = int(round((self.BoundingBox.x - 2) * scalex - HANDLE_SIZE))
                 center = int(round((self.BoundingBox.x + self.BoundingBox.width // 2) * scalex - HANDLE_SIZE // 2))
@@ -1470,7 +1483,7 @@ class Connector(DebugDataConsumer, ToolTipProducer):
     def Draw(self, dc):
         if self.Selected:
             dc.SetPen(MiterPen(wx.BLUE, 3))
-            dc.SetBrush(wx.WHITE_BRUSH)
+            dc.SetBrush(ELEMENT_PAPER_BRUSH)
         # elif len(self.Highlights) > 0:
         #    dc.SetPen(MiterPen(self.Highlights[-1][1]))
         #    dc.SetBrush(wx.Brush(self.Highlights[-1][0]))
@@ -1487,8 +1500,8 @@ class Connector(DebugDataConsumer, ToolTipProducer):
             elif self.Forced:
                 dc.SetPen(MiterPen(wx.BLUE))
             else:
-                dc.SetPen(MiterPen(wx.BLACK))
-            dc.SetBrush(wx.WHITE_BRUSH)
+                dc.SetPen(MiterPen(ELEMENT_INK))
+            dc.SetBrush(ELEMENT_PAPER_BRUSH)
         parent_pos = self.ParentBlock.GetPosition()
 
         if getattr(dc, "printing", False):
@@ -1554,7 +1567,7 @@ class Connector(DebugDataConsumer, ToolTipProducer):
                             parent_pos[1] + self.Pos.y + CONNECTOR_SIZE * self.Direction[1] +
                             height * (self.Direction[1] - 1))
             dc.SetFont(self.ParentBlock.Parent.GetFont())
-            dc.SetTextForeground(wx.BLACK)
+            dc.SetTextForeground(ELEMENT_INK)
 
 
 # -------------------------------------------------------------------------------
@@ -2725,8 +2738,8 @@ class Wire(Graphic_Element, DebugDataConsumer):
             dc.SetPen(MiterPen(wx.BLUE))
             dc.SetBrush(wx.BLUE_BRUSH)
         else:
-            dc.SetPen(MiterPen(wx.BLACK))
-            dc.SetBrush(wx.BLACK_BRUSH)
+            dc.SetPen(MiterPen(ELEMENT_INK))
+            dc.SetBrush(ELEMENT_INK_BRUSH)
         # Draw the start and end points if they are not connected or the mouse is over them
         if len(self.Points) > 0 and (not self.StartConnected or self.OverStart):
             dc.DrawCircle(self.Points[0].x, self.Points[0].y, POINT_RADIUS)
@@ -2772,7 +2785,7 @@ class Wire(Graphic_Element, DebugDataConsumer):
                         y = self.Points[middle].y - height
                     dc.DrawText(self.ComputedValue, x, y)
             dc.SetFont(self.Parent.GetFont())
-            dc.SetTextForeground(wx.BLACK)
+            dc.SetTextForeground(ELEMENT_INK)
 
 
 # -------------------------------------------------------------------------------
@@ -2951,8 +2964,8 @@ class Comment(Graphic_Element):
     # Draws the comment and its content
     def Draw(self, dc):
         Graphic_Element.Draw(self, dc)
-        dc.SetPen(MiterPen(wx.BLACK))
-        dc.SetBrush(wx.WHITE_BRUSH)
+        dc.SetPen(MiterPen(ELEMENT_INK))
+        dc.SetBrush(ELEMENT_PAPER_BRUSH)
         # Draws the comment shape
         polygon = [wx.Point(self.Pos.x, self.Pos.y),
                    wx.Point(self.Pos.x + self.Size[0] - 10, self.Pos.y),
@@ -2963,7 +2976,7 @@ class Comment(Graphic_Element):
 
         # dc.SetBrush call is workaround for the issue with wx.PrinterDC
         # with wxPython 3.0 on GNU/Linux (don't remove it)
-        dc.SetBrush(wx.WHITE_BRUSH)
+        dc.SetBrush(ELEMENT_PAPER_BRUSH)
         lines = [wx.Point(self.Pos.x + self.Size[0] - 10, self.Pos.y),
                  wx.Point(self.Pos.x + self.Size[0] - 10, self.Pos.y + 10),
                  wx.Point(self.Pos.x + self.Size[0], self.Pos.y + 10)]

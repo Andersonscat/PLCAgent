@@ -31,7 +31,9 @@ import base64
 import wx
 import wx.grid
 import wx.aui
+import wx.html2
 
+import ide_theme
 from editors.EditorPanel import EditorPanel
 from editors.SFCViewer import SFC_Viewer
 from editors.LDViewer import LD_Viewer
@@ -45,6 +47,20 @@ from controls.DebugVariablePanel import DebugVariablePanel
 from dialogs import ProjectDialog, PouDialog, PouTransitionDialog, PouActionDialog, FindInPouDialog, SearchInProjectDialog, EditorUpdateDialog
 from util.BitmapLibrary import GetBitmap
 from plcopen.types_enums import *
+
+try:
+    from ai.chat_panel import ChatPanel
+    from ai.hmi_panel import HMIPanel
+    from ai.status_strip import StatusStrip
+    from ai.sidebar_panel import SidebarPanel
+    _AI_AVAILABLE = True
+except Exception as _ai_import_err:
+    ChatPanel = None
+    HMIPanel = None
+    StatusStrip = None
+    SidebarPanel = None
+    _AI_AVAILABLE = False
+    _AI_IMPORT_ERROR = _ai_import_err
 
 # Define PLCOpenEditor controls id
 [
@@ -232,6 +248,48 @@ def ComputeTabsLayout(tabs, rect):
     return tabs
 
 
+_WELCOME_HTML = r"""<!doctype html><html><head><meta charset="utf-8"><style>
+  html,body{margin:0;height:100%;display:flex;align-items:center;justify-content:center;
+    background:#fcfcfc;font:13.5px/1.55 -apple-system,"SF Pro Text","Segoe UI",sans-serif;
+    color:#8a8d96;-webkit-font-smoothing:antialiased;-webkit-user-select:none;}
+  .wrap{text-align:center;padding:24px;}
+  .logo{width:56px;height:56px;margin:0 auto 18px;border-radius:15px;
+    background:linear-gradient(135deg,#de8c1e,#a8650f);display:flex;align-items:center;
+    justify-content:center;box-shadow:0 8px 22px rgba(222,140,30,.26);}
+  .logo svg{width:30px;height:30px;color:#fff;}
+  h2{color:#20222a;font-weight:600;font-size:18px;margin:0 0 9px;letter-spacing:-.2px;}
+  p{margin:3px 0;font-size:13px;}
+  .kbd{background:#eef0f3;border:1px solid #d2d5dc;border-radius:5px;padding:1px 7px;
+    color:#4a4d56;font-size:12px;}
+</style></head><body>
+  <div class="wrap">
+    <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>
+      <path d="M7 13h3M7 16h6"/><circle cx="16.5" cy="14.5" r="1.5"/></svg></div>
+    <h2>Open a block to edit</h2>
+    <p>Double-click a Program block in the project tree,</p>
+    <p>or describe one in the <span class="kbd">PLC&nbsp;Agent</span> chat.</p>
+  </div>
+</body></html>"""
+
+
+class WorkAreaWelcome(wx.Panel):
+    """Light HTML empty-state overlay for the editor work area (the dark empty
+    AuiNotebook body ignores SetBackgroundColour on macOS). A child window, not
+    a notebook page — shown only when no editor is open."""
+
+    def __init__(self, parent):
+        wx.Panel.__init__(self, parent)
+        self.SetBackgroundColour(ide_theme.SURFACE)
+        self.webview = wx.html2.WebView.New(self)
+        self.webview.EnableContextMenu(False)
+        self.webview.SetPage(_WELCOME_HTML, "")
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.webview, 1, wx.EXPAND)
+        self.SetSizer(sizer)
+
+
 class IDEFrame(wx.Frame):
     """IDEFrame Base Class"""
 
@@ -264,36 +322,11 @@ class IDEFrame(wx.Frame):
                       (True, FREEDRAWING_MODE | DRIVENDRAWING_MODE,
                        ID_PLCOPENEDITOREDITORTOOLBARCONNECTION, "OnConnectionTool",
                        "add_connection", _("Create a new connection"))],
-            "LD":    [(True, FREEDRAWING_MODE | DRIVENDRAWING_MODE,
-                       ID_PLCOPENEDITOREDITORTOOLBARMOTION, "OnMotionTool",
-                       "move", _("Move the view")),
-                      (True, FREEDRAWING_MODE,
-                       ID_PLCOPENEDITOREDITORTOOLBARCOMMENT, "OnCommentTool",
-                       "add_comment", _("Create a new comment")),
-                      (True, FREEDRAWING_MODE,
-                       ID_PLCOPENEDITOREDITORTOOLBARPOWERRAIL, "OnPowerRailTool",
-                       "add_powerrail", _("Create a new power rail")),
-                      (False, DRIVENDRAWING_MODE,
-                       ID_PLCOPENEDITOREDITORTOOLBARRUNG, "OnRungTool",
-                       "add_rung", _("Create a new rung")),
-                      (True, FREEDRAWING_MODE,
-                       ID_PLCOPENEDITOREDITORTOOLBARCOIL, "OnCoilTool",
-                       "add_coil", _("Create a new coil")),
-                      (False, FREEDRAWING_MODE | DRIVENDRAWING_MODE,
-                       ID_PLCOPENEDITOREDITORTOOLBARCONTACT, "OnContactTool",
-                       "add_contact", _("Create a new contact")),
-                      (False, DRIVENDRAWING_MODE,
-                       ID_PLCOPENEDITOREDITORTOOLBARBRANCH, "OnBranchTool",
-                       "add_branch", _("Create a new branch")),
-                      (True, FREEDRAWING_MODE,
-                       ID_PLCOPENEDITOREDITORTOOLBARVARIABLE, "OnVariableTool",
-                       "add_variable", _("Create a new variable")),
-                      (False, FREEDRAWING_MODE | DRIVENDRAWING_MODE,
-                       ID_PLCOPENEDITOREDITORTOOLBARBLOCK, "OnBlockTool",
-                       "add_block", _("Create a new block")),
-                      (True, FREEDRAWING_MODE,
-                       ID_PLCOPENEDITOREDITORTOOLBARCONNECTION, "OnConnectionTool",
-                       "add_connection", _("Create a new connection"))],
+            # LD drawing tools intentionally removed — in plc-cursor the ladder
+            # is authored by the AI agent (add_ladder_rung / add_ladder_move_rung),
+            # not by hand-placing contacts/coils. Empty like ST/IL so opening an
+            # LD POU shows only the permanent Select arrow.
+            "LD":    [],
             "SFC":   [(True, FREEDRAWING_MODE | DRIVENDRAWING_MODE,
                        ID_PLCOPENEDITOREDITORTOOLBARMOTION, "OnMotionTool",
                        "move", _("Move the view")),
@@ -499,8 +532,19 @@ class IDEFrame(wx.Frame):
         #                          Creating main structure
         # -----------------------------------------------------------------------
 
+        # Light frame background so any 1px gap between docked panes/toolbars
+        # shows the light chrome instead of the OS default dark line.
+        try:
+            self.SetBackgroundColour(ide_theme.CHROME_BG)
+        except Exception:
+            pass
+
         self.AUIManager = wx.aui.AuiManager(self)
         self.AUIManager.SetDockSizeConstraint(0.5, 0.5)
+        # Dark, uniform AUI chrome so docked toolbars read as a single
+        # full-width bar (the dock background behind a content-sized toolbar
+        # pane would otherwise show a different shade where the toolbar "ends").
+        self._apply_aui_theme()
         self.Panes = {}
 
         self.LeftNoteBook = wx.aui.AuiNotebook(
@@ -545,6 +589,92 @@ class IDEFrame(wx.Frame):
             wx.aui.AuiPaneInfo().Name("LibraryPane").Right().Layer(0).
             BestSize(wx.Size(250, 400)).CloseButton(False))
 
+        if _AI_AVAILABLE:
+            # Cursor-style layout: Sidebar (WebView) | Editor+HMI tabs | Chat.
+            # Our SidebarPanel replaces Beremiz's CustomTree + variables sidebar
+            # with a single dark HTML pane.
+            self.SidebarPanel = SidebarPanel(
+                self,
+                project_controller_getter=lambda: getattr(self, "CTR", None),
+                open_pou_callback=self._sidebar_open_pou,
+                create_pou_callback=self._sidebar_create_pou,
+            )
+            self.AUIManager.AddPane(
+                self.SidebarPanel,
+                wx.aui.AuiPaneInfo().Name("AIProjectSidebar").Caption("Project").
+                Left().Layer(2).BestSize(wx.Size(260, 600)).
+                MinSize(wx.Size(220, 200)).
+                Floatable(True).CloseButton(False).CaptionVisible(False))
+
+            # HMI panel is created with self as parent (TabsOpened doesn't
+            # exist yet here). chat_panel reparents into TabsOpened the first
+            # time it adds the HMI tab.
+            self.HMIPanel = HMIPanel(self)
+            self.HMIPanel.Hide()
+
+            self.ChatPanel = ChatPanel(
+                self, project_controller_getter=lambda: getattr(self, "CTR", None))
+            self.AUIManager.AddPane(
+                self.ChatPanel,
+                wx.aui.AuiPaneInfo().Name("ChatPane").Caption("PLC Agent").
+                CaptionVisible(False).
+                Right().Layer(1).BestSize(wx.Size(460, 600)).
+                MinSize(wx.Size(320, 300)).
+                Floatable(True).CloseButton(False))
+
+            # The HTML sidebar/chat fully replace the native project-tree and
+            # library notebooks — DETACH those from AUI so they can never
+            # resurface (Hide alone wasn't reliable across project loads).
+            for _native_nb in (self.LeftNoteBook, self.RightNoteBook):
+                try:
+                    self.AUIManager.DetachPane(_native_nb)
+                    _native_nb.Hide()
+                except Exception:
+                    pass
+
+            # Compact PLC-engineer layout settles after Beremiz subclass finishes.
+            # Keeps: project tree + variables sidebar + editor/HMI tabs + chat
+            #        + status strip + RUN/STOP toolbar + collapsed bottom console.
+            # Hides:  Library/Debugger browser, top File/Edit/Cut toolbars (live
+            #         in macOS menu bar + keyboard shortcuts).
+            # Re-docks ResultPane (Console) collapsed to bottom — user can click
+            # tab to expand when they want to see compile output.
+            # Note: EditorToolBar holds the LD/FBD/SFC drawing tools (Contact,
+            # Coil, Wire, Block, Step, Transition…) that activate when the
+            # corresponding editor type is open. Hiding it kills the ability
+            # to draw ladders by hand. Keep it visible.
+            HIDE_PANES = ("ProjectPane", "LibraryPane", "MenuToolBar")
+
+            def _apply_compact_layout():
+                for pane_name in HIDE_PANES:
+                    pane = self.AUIManager.GetPane(pane_name)
+                    if pane.IsOk():
+                        pane.Hide()
+                # Bottom console: keep visible but minimum-height collapsed.
+                result = self.AUIManager.GetPane("ResultPane")
+                if result.IsOk():
+                    result.Show().MinSize(wx.Size(-1, 28)).BestSize(wx.Size(-1, 28)).\
+                        Caption("Console").CaptionVisible(False).\
+                        Floatable(False).Movable(False)
+                self.AUIManager.Update()
+
+            # Beremiz subclass init re-shows panes after we hide them, so we
+            # re-hide a few times over the first second. Then install a hook
+            # on AUIManager.Update so any future re-show gets squashed too.
+            wx.CallLater(50, _apply_compact_layout)
+            wx.CallLater(300, _apply_compact_layout)
+            wx.CallLater(800, _apply_compact_layout)
+
+            # Permanent enforcement: monkey-patch AUIManager.Update to re-hide.
+            _orig_update = self.AUIManager.Update
+            def _patched_update(*a, **kw):
+                for pane_name in HIDE_PANES:
+                    p = self.AUIManager.GetPane(pane_name)
+                    if p.IsOk() and p.IsShown():
+                        p.Hide()
+                return _orig_update(*a, **kw)
+            self.AUIManager.Update = _patched_update
+
         self.TabsOpened = wx.aui.AuiNotebook(
             self, ID_PLCOPENEDITORTABSOPENED,
             style=(wx.aui.AUI_NB_DEFAULT_STYLE |
@@ -559,6 +689,51 @@ class IDEFrame(wx.Frame):
                              self.OnPageDragged)
         self.AUIManager.AddPane(self.TabsOpened,
                                 wx.aui.AuiPaneInfo().CentrePane().Name("TabsPane"))
+
+        # Modern flat light tabs for every AUI notebook. The default tab art
+        # draws beveled, gradient "90s" tabs; AuiSimpleTabArt is flat. We tint
+        # it light and give the active tab a white surface + amber accent.
+        for _nb in (self.LeftNoteBook, self.BottomNoteBook,
+                    self.RightNoteBook, self.TabsOpened):
+            try:
+                _art = wx.aui.AuiSimpleTabArt()
+                _nb.SetArtProvider(_art)
+                _art.SetColour(ide_theme.CHROME_BG)
+                _art.SetActiveColour(ide_theme.SURFACE)
+            except Exception:
+                pass
+            try:
+                # Editor work area = white; side/bottom chrome = light panel.
+                _nb.SetBackgroundColour(
+                    ide_theme.SURFACE if _nb is self.TabsOpened else ide_theme.PANEL_BG)
+            except Exception:
+                pass
+
+        # The empty AuiNotebook body paints dark on macOS (ignores bg colour).
+        # Cover it with a light welcome overlay — a plain child window (NOT a
+        # notebook page, so it fires no PAGE_CHANGED cascade). Shown only when
+        # there are no editor pages; hidden once an editor is open.
+        self.WorkAreaWelcome = WorkAreaWelcome(self.TabsOpened)
+
+        def _update_welcome(evt=None):
+            nb = self.TabsOpened
+            w = self.WorkAreaWelcome
+            if nb.GetPageCount() == 0:
+                w.SetSize(nb.GetClientSize())
+                w.Move(0, 0)
+                w.Show()
+                w.Raise()
+            else:
+                w.Hide()
+            if evt is not None:
+                evt.Skip()
+        self._update_welcome = _update_welcome
+        self.TabsOpened.Bind(wx.EVT_SIZE, _update_welcome)
+        self.TabsOpened.Bind(wx.aui.EVT_AUINOTEBOOK_PAGE_CHANGED,
+                             lambda e: (_update_welcome(), e.Skip()))
+        self.TabsOpened.Bind(wx.aui.EVT_AUINOTEBOOK_PAGE_CLOSE,
+                             lambda e: (wx.CallAfter(_update_welcome), e.Skip()))
+        wx.CallAfter(_update_welcome)
 
         # -----------------------------------------------------------------------
         #                    Creating PLCopen Project Types Tree
@@ -579,8 +754,17 @@ class IDEFrame(wx.Frame):
                                       agwStyle=(wx.TR_HAS_BUTTONS |
                                                 wx.TR_SINGLE |
                                                 wx.TR_EDIT_LABELS))
-        self.ProjectTree.SetBackgroundBitmap(GetBitmap("custom_tree_background"),
-                                             wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM)
+        # Dark, professional styling (TIA-Portal-style project tree).
+        # Drops the light watermark bitmap that clashed with the dark IDE.
+        self.ProjectTree.SetBackgroundColour(ide_theme.PANEL_BG)
+        self.ProjectTree.SetForegroundColour(ide_theme.INK)
+        self.ProjectTree.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT,
+                                         wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        try:
+            self.ProjectTree.SetIndent(14)
+            self.ProjectTree.SetSpacing(16)
+        except Exception:
+            pass
         add_menu = wx.Menu()
         self._init_coll_AddMenu_Items(add_menu)
         self.ProjectTree.SetAddMenu(add_menu)
@@ -609,6 +793,11 @@ class IDEFrame(wx.Frame):
         self.LeftNoteBook.AddPage(*self.MainTabs["ProjectPanel"])
 
         self.ProjectPanel.SplitHorizontally(self.ProjectTree, self.PouInstanceVariablesPanel, 300)
+        for _w in (self.ProjectPanel, self.PouInstanceVariablesPanel, self.LeftNoteBook):
+            try:
+                _w.SetBackgroundColour(ide_theme.PANEL_BG)
+            except Exception:
+                pass
 
         # -----------------------------------------------------------------------
         #                            Creating Tool Bar
@@ -616,22 +805,32 @@ class IDEFrame(wx.Frame):
 
         MenuToolBar = wx.ToolBar(self, ID_PLCOPENEDITOREDITORMENUTOOLBAR,
                                  wx.DefaultPosition, wx.DefaultSize,
-                                 wx.TB_FLAT | wx.TB_HORIZONTAL | wx.NO_BORDER)
+                                 wx.TB_FLAT | wx.TB_HORIZONTAL | wx.NO_BORDER | wx.TB_NODIVIDER)
         MenuToolBar.SetToolBitmapSize(wx.Size(25, 25))
+        MenuToolBar.SetBackgroundColour(ide_theme.CHROME_BG)
+        MenuToolBar.SetForegroundColour(ide_theme.INK)
         MenuToolBar.Realize()
         self.Panes["MenuToolBar"] = MenuToolBar
         self.AUIManager.AddPane(MenuToolBar, wx.aui.AuiPaneInfo().
                                 Name("MenuToolBar").Caption(_("Menu ToolBar")).
                                 ToolbarPane().Top().
+                                Gripper(False).Movable(False).Floatable(False).
                                 LeftDockable(False).RightDockable(False))
 
         EditorToolBar = wx.ToolBar(self, ID_PLCOPENEDITOREDITORTOOLBAR,
                                    wx.DefaultPosition, wx.DefaultSize,
-                                   wx.TB_FLAT | wx.TB_HORIZONTAL | wx.NO_BORDER)
-        EditorToolBar.SetToolBitmapSize(wx.Size(25, 25))
+                                   wx.TB_FLAT | wx.TB_HORIZONTAL | wx.NO_BORDER | wx.TB_NODIVIDER)
+        EditorToolBar.SetToolBitmapSize(wx.Size(20, 20))
+        EditorToolBar.SetBackgroundColour(ide_theme.CHROME_BG)
+        EditorToolBar.SetForegroundColour(ide_theme.INK)
+        _sel_bmp = GetBitmap("select")
+        try:
+            _sel_bmp.SetScaleFactor(2.0)   # crisp on Retina (48px asset @2x)
+        except Exception:
+            pass
         EditorToolBar.AddRadioTool(ID_PLCOPENEDITOREDITORTOOLBARSELECTION,
                                    _("Select"),
-                                   GetBitmap("select"),
+                                   _sel_bmp,
                                    wx.NullBitmap,
                                    _("Select an object"))
         EditorToolBar.Realize()
@@ -639,6 +838,7 @@ class IDEFrame(wx.Frame):
         self.AUIManager.AddPane(EditorToolBar, wx.aui.AuiPaneInfo().
                                 Name("EditorToolBar").Caption(_("Editor ToolBar")).
                                 ToolbarPane().Top().Position(1).
+                                Gripper(False).Movable(False).Floatable(False).
                                 LeftDockable(False).RightDockable(False))
 
         self.Bind(wx.EVT_MENU, self.OnSelectionTool,
@@ -775,6 +975,44 @@ class IDEFrame(wx.Frame):
         if event.GetActive():
             wx.CallAfter(self._Refresh, TITLE, EDITORTOOLBAR, FILEMENU, EDITMENU, DISPLAYMENU)
         event.Skip()
+
+    def _apply_aui_theme(self):
+        """Force every AUI dock-art colour to the light chrome and remove the
+        dark 1px borders/sashes/grippers. Re-applied after toolbar refreshes
+        because AUIManager.Update() can otherwise leave dark default chrome
+        (background 38,38,38 / border 28,28,28) showing as a black strip."""
+        try:
+            art = self.AUIManager.GetArtProvider()
+        except Exception:
+            return
+        chrome = ide_theme.CHROME_BG
+        for attr in ("AUI_DOCKART_BACKGROUND_COLOUR",
+                     "AUI_DOCKART_BORDER_COLOUR",
+                     "AUI_DOCKART_GRIPPER_COLOUR",
+                     "AUI_DOCKART_INACTIVE_CAPTION_COLOUR",
+                     "AUI_DOCKART_INACTIVE_CAPTION_GRADIENT_COLOUR",
+                     "AUI_DOCKART_ACTIVE_CAPTION_COLOUR",
+                     "AUI_DOCKART_ACTIVE_CAPTION_GRADIENT_COLOUR"):
+            if hasattr(wx.aui, attr):
+                try:
+                    art.SetColour(getattr(wx.aui, attr), chrome)
+                except Exception:
+                    pass
+        # Subtle, neat 1px separator lines between docked sections.
+        if hasattr(wx.aui, "AUI_DOCKART_SASH_COLOUR"):
+            try:
+                art.SetColour(wx.aui.AUI_DOCKART_SASH_COLOUR, ide_theme.GRID_LINE)
+            except Exception:
+                pass
+        for metric, val in (("AUI_DOCKART_PANE_BORDER_SIZE", 0),
+                            ("AUI_DOCKART_SASH_SIZE", 1),
+                            ("AUI_DOCKART_GRIPPER_SIZE", 0),
+                            ("AUI_DOCKART_GRADIENT_TYPE", getattr(wx.aui, "AUI_GRADIENT_NONE", 0))):
+            if hasattr(wx.aui, metric):
+                try:
+                    art.SetMetric(getattr(wx.aui, metric), val)
+                except Exception:
+                    pass
 
     def SelectTab(self, tab):
         for notebook in [self.LeftNoteBook, self.BottomNoteBook, self.RightNoteBook]:
@@ -1425,10 +1663,47 @@ class IDEFrame(wx.Frame):
         notebook = tab.GetParent()
         notebook.SetSelection(notebook.GetPageIndex(tab))
 
+    def _sidebar_create_pou(self, name, pou_type, body_language):
+        """Manual POU creation from sidebar '+' button."""
+        if not name or self.Controler is None:
+            return
+        plc = getattr(self.Controler, "PLCControler", None) or self.Controler
+        try:
+            plc.ProjectAddPou(name, pou_type, body_language)
+        except Exception as exc:
+            print(f"[sidebar] ProjectAddPou({name!r}) failed: {exc}", flush=True)
+            return
+        if hasattr(plc, "BufferProject"):
+            plc.BufferProject()
+        # Open the new POU in the central editor immediately.
+        self._sidebar_open_pou(name)
+
+    def _sidebar_open_pou(self, pou_name):
+        """Click handler from our WebView sidebar. Opens the named POU in the
+        central editor by calling Beremiz's existing EditProjectElement with
+        the proper tagname format."""
+        if self.Controler is None:
+            return
+        try:
+            pou_type = self.Controler.GetPouType(pou_name)
+        except Exception:
+            pou_type = "program"
+        prefix_map = {"program": "P", "function": "F", "functionBlock": "FB"}
+        tagname = f"{prefix_map.get(pou_type, 'P')}::{pou_name}"
+        try:
+            self.EditProjectElement(ITEM_POU, tagname)
+        except Exception as exc:
+            print(f"[sidebar] EditProjectElement failed for {tagname!r}: {exc}",
+                  flush=True)
+
     def OnPouSelectedChanging(self, event):
         selected = self.TabsOpened.GetSelection()
         if selected >= 0:
             window = self.TabsOpened.GetPage(selected)
+            # HMI / non-POU tab pages don't have a buffer to reset.
+            if getattr(window, "GetTagName", lambda: "")() == getattr(
+                    HMIPanel, "HMI_TAGNAME", "@HMI") if HMIPanel else False:
+                event.Skip(); return
             if not window.IsDebugging():
                 window.ResetBuffer()
         event.Skip()
@@ -1438,6 +1713,10 @@ class IDEFrame(wx.Frame):
         if selected >= 0:
             window = self.TabsOpened.GetPage(selected)
             tagname = window.GetTagName()
+            # HMI tab: skip POU-tree wiring entirely.
+            if HMIPanel is not None and tagname == HMIPanel.HMI_TAGNAME:
+                wx.CallAfter(self._Refresh, FILEMENU, EDITMENU, DISPLAYMENU, EDITORTOOLBAR)
+                event.Skip(); return
             if not window.IsDebugging():
                 self.SelectProjectTreeItem(tagname)
                 self.PouInstanceVariablesPanel.SetPouType(tagname)
@@ -1558,7 +1837,7 @@ class IDEFrame(wx.Frame):
             item_name = _(item_name)
         self.ProjectTree.SetItemText(root, item_name)
         self.ProjectTree.SetPyData(root, infos)
-        highlight_colours = self.Highlights.get(infos.get("tagname", None), (wx.Colour(255, 255, 255, 0), wx.BLACK))
+        highlight_colours = self.Highlights.get(infos.get("tagname", None), (ide_theme.PANEL_BG, ide_theme.INK))
         self.ProjectTree.SetItemBackgroundColour(root, highlight_colours[0])
         self.ProjectTree.SetItemTextColour(root, highlight_colours[1])
         self.ProjectTree.SetItemExtraImage(root, None)
@@ -1805,11 +2084,12 @@ class IDEFrame(wx.Frame):
                     bodytype = self.Controler.GetEditedElementBodyType(
                         item_infos["tagname"])
                     if item_infos["type"] == ITEM_POU:
+                        pou_type = self.Controler.GetPouType(item_infos["name"])
                         block_type = {
                             "program": _("Program"),
                             "functionBlock": _("Function Block"),
-                            "function": _("Function")
-                        }[self.Controler.GetPouType(item_infos["name"])]
+                            "function": _("Function"),
+                        }.get(pou_type, _("POU"))
                     elif item_infos["type"] == ITEM_TRANSITION:
                         block_type = "Transition"
                     else:

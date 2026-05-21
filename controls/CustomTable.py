@@ -28,9 +28,9 @@ import wx
 import wx.grid
 
 if wx.Platform == '__WXMSW__':
-    ROW_HEIGHT = 20
+    ROW_HEIGHT = 26
 else:
-    ROW_HEIGHT = 28
+    ROW_HEIGHT = 34
 
 
 class CustomTable(wx.grid.PyGridTableBase):

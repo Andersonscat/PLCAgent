@@ -26,6 +26,7 @@
 
 import wx
 
+import ide_theme
 from controls import VariablePanel
 
 
@@ -52,16 +53,25 @@ class EditorPanel(wx.SplitterWindow):
 
         self._init_Editor(self)
 
-        if self.Editor is not None and self.VariableEditor is not None:
-            self.SplitHorizontally(self.VariableEditor, self.Editor, 200)
+        # A subclass (e.g. the LD Viewer) may wrap the editor canvas in a
+        # container panel — with its own embedded toolbar — and expose it as
+        # self._EditorContainer. That container is what gets shown in the
+        # splitter pane; self.Editor still points at the inner canvas.
+        editor_pane = getattr(self, "_EditorContainer", None) or self.Editor
+
+        if editor_pane is not None and self.VariableEditor is not None:
+            self.SplitHorizontally(self.VariableEditor, editor_pane, 200)
         elif self.VariableEditor is not None:
             self.Initialize(self.VariableEditor)
-        elif self.Editor is not None:
-            self.Initialize(self.Editor)
+        elif editor_pane is not None:
+            self.Initialize(editor_pane)
 
     def __init__(self, parent, tagname, window, controler, debug=False):
+        # No SUNKEN_BORDER/SP_3D — those draw the dark inset "black line" frame
+        # around the editor. Flat, borderless, light.
         wx.SplitterWindow.__init__(self, parent,
-                                   style=wx.SUNKEN_BORDER | wx.SP_3D)
+                                   style=wx.SP_LIVE_UPDATE | wx.NO_BORDER)
+        self.SetBackgroundColour(ide_theme.SURFACE)
 
         self.ParentWindow = window
         self.Controler = controler

@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Elevator HMI</title>
+<style>
+ :root {
+   --bg: #15171c;
+   --panel: #1e1e22;
+   --line: #3a3a44;
+   --ink: #d6d6d6;
+   --dim: #7a7a82;
+   --on: #67d97a;
+   --off: #3a3a44;
+   --car: #6ab0ff;
+   --door: #2d6ca8;
+ }
+ html, body { margin:0; padding:0; background:var(--bg); color:var(--ink);
+              font-family:-apple-system,Helvetica,Arial,sans-serif; height:100%; }
+ .wrap { display:flex; flex-direction:row; height:100%; padding:14px; box-sizing:border-box; gap:14px; }
+ .shaft { flex:0 0 auto; }
+ .panel { flex:1 1 auto; background:var(--panel); border:1px solid var(--line);
+          border-radius:6px; padding:14px; display:flex; flex-direction:column; gap:10px;
+          min-width:200px; }
+ h3 { margin:0; font-weight:500; font-size:13px; color:var(--dim);
+      text-transform:uppercase; letter-spacing:.5px; }
+ .floor-btns { display:flex; flex-direction:column-reverse; gap:6px; }
+ .floor-btns button {
+   background:var(--panel); color:var(--ink); border:1px solid var(--line);
+   border-radius:4px; padding:10px 12px; font-size:14px; cursor:pointer; text-align:left;
+   transition:background .12s;
+ }
+ .floor-btns button:hover { background:#26262d; }
+ .floor-btns button.lit { background:#3a2a14; border-color:#a06d28; color:#e0bd6c; }
+ .led-row { display:flex; gap:14px; align-items:center; font-size:12px; color:var(--dim); }
+ .led { width:10px; height:10px; border-radius:50%; background:var(--off); transition:background .15s; }
+ .led.on { background:var(--on); box-shadow:0 0 6px var(--on); }
+ .status { font-family:ui-monospace,monospace; font-size:12px; color:var(--dim);
+           background:#101015; border:1px solid var(--line); border-radius:4px;
+           padding:8px 10px; line-height:1.6; }
+ .status b { color:var(--ink); font-weight:500; }
+ .footer { font-size:11px; color:var(--dim); margin-top:auto; opacity:.7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<svg class="shaft" width="260" height="640" viewBox="0 0 260 640" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="car-interior-clip">
+      <rect x="-55" y="-40" width="110" height="80"/>
+    </clipPath>
+  </defs>
+
+  <!-- shaft outer -->
+  <rect x="50" y="40" width="160" height="560" fill="#0a0a0e" stroke="#3a3a44" stroke-width="2"/>
+
+  <!-- floor dividers (equally spaced: shaft 560 / 3 ≈ 187 each) -->
+  <g stroke="#3a3a44" stroke-width="1">
+    <line x1="50" y1="227" x2="210" y2="227"/>
+    <line x1="50" y1="413" x2="210" y2="413"/>
+  </g>
+
+  <!-- floor labels (centered on each floor zone) -->
+  <g font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="12" fill="#7a7a82" text-anchor="end">
+    <text x="44" y="138">F3</text>
+    <text x="44" y="325">F2</text>
+    <text x="44" y="512">F1</text>
+  </g>
+
+  <!-- AtFloor LED indicators on right side of shaft -->
+  <g>
+    <circle id="led-f3" cx="224" cy="133" r="5" fill="#3a3a44"/>
+    <circle id="led-f2" cx="224" cy="320" r="5" fill="#3a3a44"/>
+    <circle id="led-f1" cx="224" cy="507" r="5" fill="#3a3a44"/>
+  </g>
+
+  <!-- motor direction arrows: above shaft = up command, below = down -->
+  <g id="motor-up"   transform="translate(130, 28)" opacity="0.15">
+    <polygon points="-12,8 12,8 0,-8" fill="#67d97a"/>
+  </g>
+  <g id="motor-down" transform="translate(130, 612)" opacity="0.15">
+    <polygon points="-12,-8 12,-8 0,8" fill="#67d97a"/>
+  </g>
+
+  <!-- elevator car: drawn centered on origin; translated by JS -->
+  <g id="car" transform="translate(130, 507)">
+    <!-- dark interior visible when doors are open -->
+    <rect x="-55" y="-40" width="110" height="80" fill="#101015"/>
+    <!-- door halves slide outward to reveal interior; clipped to car frame so they
+         don't poke out the sides as they retract -->
+    <g clip-path="url(#car-interior-clip)">
+      <rect id="door-left"  x="-55" y="-40" width="55" height="80"
+            fill="#2d6ca8" stroke="#1a4570" stroke-width="1"/>
+      <rect id="door-right" x="0"   y="-40" width="55" height="80"
+            fill="#2d6ca8" stroke="#1a4570" stroke-width="1"/>
+    </g>
+    <!-- car frame on top so it always shows as the outline -->
+    <rect x="-60" y="-45" width="120" height="90" fill="none"
+          stroke="#6ab0ff" stroke-width="3" rx="3"/>
+    <!-- tiny floor indicator inside car (visual depth) -->
+    <line x1="-58" y1="44" x2="58" y2="44" stroke="#3a6f9c" stroke-width="1"/>
+  </g>
+</svg>
+
+<div class="panel">
+  <h3>Floor calls</h3>
+  <div class="floor-btns">
+    <button data-floor="1" data-var="request1">Floor 1 — Lobby</button>
+    <button data-floor="2" data-var="request2">Floor 2</button>
+    <button data-floor="3" data-var="request3">Floor 3</button>
+  </div>
+
+  <h3>Status</h3>
+  <div class="status" id="status-box">Connecting…</div>
+
+  <h3>Live signals</h3>
+  <div class="led-row"><div id="led-mup" class="led"></div>MotorUp</div>
+  <div class="led-row"><div id="led-mdn" class="led"></div>MotorDown</div>
+  <div class="led-row"><div id="led-door" class="led"></div>DoorOpen</div>
+
+  <div class="footer">PLC-driven HMI · polling 127.0.0.1:8765/state at 10 Hz</div>
+</div>
+
+</div>
+
+<script>
+const API = location.origin;
+// Floor centers — match the SVG coordinates above (F1=507, F2=320, F3=133).
+// Linear: each floor is 187 units apart.
+const FLOOR_BOTTOM_Y = 507;
+const FLOOR_STEP = 187;
+
+const $ = id => document.getElementById(id);
+
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+// Map CarPosition (REAL, 1.0=F1, 2.0=F2, 3.0=F3) to SVG y coordinate
+// where the CENTER of the car sits at the floor line.
+function carY(pos){
+  return FLOOR_BOTTOM_Y - (clamp(pos, 1, 3) - 1) * FLOOR_STEP;
+}
+
+async function pollState(){
+  try {
+    const r = await fetch(`${API}/state`, {cache:'no-store'});
+    const j = await r.json();
+    render(j.variables);
+  } catch (e) {
+    $('status-box').innerHTML = `<b>disconnected</b> — bridge down or sim stopped.<br><span style="color:#a06d28">${e.message||e}</span>`;
+  }
+}
+
+function val(vars, name, fallback){
+  const v = vars[name];
+  return (v && v.value !== null && v.value !== undefined) ? v.value : fallback;
+}
+
+function render(vars){
+  const pos = Number(val(vars, 'car_position', 1.0));
+  const mup = !!val(vars, 'motor_up', false);
+  const mdn = !!val(vars, 'motor_down', false);
+  const door = !!val(vars, 'door_open', false);
+  const f1 = !!val(vars, 'at_floor_1', false);
+  const f2 = !!val(vars, 'at_floor_2', false);
+  const f3 = !!val(vars, 'at_floor_3', false);
+  const r1 = !!val(vars, 'request1', false);
+  const r2 = !!val(vars, 'request2', false);
+  const r3 = !!val(vars, 'request3', false);
+
+  // car position — translate to (x_center, floor_y); origin x is shaft center
+  $('car').setAttribute('transform', `translate(130, ${carY(pos).toFixed(1)})`);
+
+  // doors retract into the car frame when open (clipPath hides the overflow)
+  const slide = door ? 52 : 0;
+  $('door-left').setAttribute('x', -55 - slide);   // left door slides further left
+  $('door-right').setAttribute('x', 0 + slide);    // right door slides further right
+
+  // floor LEDs
+  $('led-f1').setAttribute('fill', f1 ? '#67d97a' : '#3a3a44');
+  $('led-f2').setAttribute('fill', f2 ? '#67d97a' : '#3a3a44');
+  $('led-f3').setAttribute('fill', f3 ? '#67d97a' : '#3a3a44');
+
+  // motor arrows
+  $('motor-up').setAttribute('opacity', mup ? '1' : '0.15');
+  $('motor-down').setAttribute('opacity', mdn ? '1' : '0.15');
+
+  // signal LEDs
+  $('led-mup').classList.toggle('on', mup);
+  $('led-mdn').classList.toggle('on', mdn);
+  $('led-door').classList.toggle('on', door);
+
+  // request button highlight
+  document.querySelectorAll('.floor-btns button').forEach(b => {
+    const v = b.dataset.var;
+    const lit = ({request1: r1, request2: r2, request3: r3})[v];
+    b.classList.toggle('lit', lit);
+  });
+
+  // status box
+  const floor = f3 ? 3 : f2 ? 2 : f1 ? 1 : '—';
+  $('status-box').innerHTML =
+    `Position: <b>${pos.toFixed(2)}</b>  ·  At floor: <b>${floor}</b><br>` +
+    `Motor: <b>${mup ? 'UP' : mdn ? 'DOWN' : 'idle'}</b>  ·  Door: <b>${door ? 'OPEN' : 'closed'}</b><br>` +
+    `Calls: ${r1?'F1 ':''}${r2?'F2 ':''}${r3?'F3 ':''}${(!r1&&!r2&&!r3)?'<span style="color:#7a7a82">none</span>':''}`;
+}
+
+const debugBox = document.createElement('div');
+debugBox.id = 'debug-box';
+debugBox.style.cssText = 'font-family:ui-monospace,monospace;font-size:11px;color:#8a8a92;background:#101015;border:1px solid #3a3a44;border-radius:4px;padding:6px 8px;margin-top:6px;min-height:18px';
+debugBox.textContent = '(click a floor button)';
+document.querySelector('.panel').appendChild(debugBox);
+
+function logDebug(msg, color){
+  const ts = new Date().toLocaleTimeString().split(' ')[0];
+  debugBox.innerHTML = `<span style="color:${color||'#8a8a92'}">[${ts}] ${msg}</span>`;
+}
+
+document.querySelectorAll('.floor-btns button').forEach(b => {
+  b.addEventListener('click', async () => {
+    const v = b.dataset.var;
+    logDebug(`POST /force ${v}=TRUE ...`, '#dcb87a');
+    try {
+      const r = await fetch(`${API}/force?path=${v}&value=TRUE`, {method:'POST'});
+      const j = await r.json();
+      if (j.ok) logDebug(`force ${v}=TRUE → ok (iec=${j.iec_path||'?'})`, '#67d97a');
+      else logDebug(`force ${v} → ${JSON.stringify(j)}`, '#ff7878');
+    } catch (e) {
+      logDebug(`fetch failed: ${e.message||e}`, '#ff7878');
+    }
+    // auto-release after a short pulse so the PLC sees a button press, not a held button
+    setTimeout(async () => {
+      try {
+        await fetch(`${API}/release?path=${v}`, {method:'POST'});
+      } catch (e) {}
+    }, 250);
+  });
+});
+
+setInterval(pollState, 100);
+pollState();
+</script>
+</body>
+</html>

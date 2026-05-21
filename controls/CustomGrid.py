@@ -27,6 +27,8 @@
 import wx
 import wx.grid
 
+import ide_theme
+
 
 class CustomGrid(wx.grid.Grid):
 
@@ -40,10 +42,8 @@ class CustomGrid(wx.grid.Grid):
         self.UpButton = None
         self.DownButton = None
 
-        self.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL, False, 'Sans'))
-        self.SetLabelFont(wx.Font(10, wx.DEFAULT, wx.NORMAL, wx.NORMAL, False, 'Sans'))
-        self.SetSelectionBackground(wx.WHITE)
-        self.SetSelectionForeground(wx.BLACK)
+        # Light-modern look (thin grey rules, soft selection, muted header).
+        ide_theme.style_grid(self)
         self.DisableDragRowSize()
 
         self.Bind(wx.grid.EVT_GRID_SELECT_CELL, self.OnSelectCell)
