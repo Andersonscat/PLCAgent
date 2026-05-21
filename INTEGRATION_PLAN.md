@@ -112,10 +112,19 @@ TIA right panel: Favorites · Basic · Extended · Technology · Communication.
 
 ---
 
-## 6. Editor tabs — 🟡 (constrained)
+## 6. Editor tabs — ❌ BLOCKED (3 segfault routes proven)
 
-Keep **`AuiSimpleTabArt`** (flat light). Custom C++ tab art / HTML-bar wrapping
-the central notebook **segfault** → do not attempt again. Acceptable as-is.
+Keep **`AuiSimpleTabArt`** (flat light, angled). Customizing the editor tab
+chrome crashes this wxPython/macOS build — **three** distinct approaches all
+segfault (exit 139), do NOT retry:
+1. Custom C++ `AuiTabArt` subclass (override `DrawTab`).
+2. Wrapping `TabsOpened` in a container panel + HTML tab-bar.
+3. HTML tab-bar as a **child overlay** of the AuiNotebook + `SetTabCtrlHeight`
+   (even though the WorkAreaWelcome overlay of the same parent is safe).
+
+The native AuiNotebook tab strip is fundamentally fragile here. The angled tab
+stays. (The page **border/frame** was separately removed via `BORDER_NONE` on
+the editor panel/WebView — that part is fine.)
 
 ---
 

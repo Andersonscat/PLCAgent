@@ -62,6 +62,11 @@ except Exception as _ai_import_err:
     _AI_AVAILABLE = False
     _AI_IMPORT_ERROR = _ai_import_err
 
+try:                       # isolated: a failure here must not disable other panels
+    from ai.instructions_panel import InstructionsPanel
+except Exception:
+    InstructionsPanel = None
+
 import sys
 USE_HTML_LD = True   # segmented HTML LD editor (fallback to native LD_Viewer)
 
@@ -621,9 +626,19 @@ class IDEFrame(wx.Frame):
                 self.ChatPanel,
                 wx.aui.AuiPaneInfo().Name("ChatPane").Caption("PLC Agent").
                 CaptionVisible(False).
-                Right().Layer(1).BestSize(wx.Size(460, 600)).
+                Right().Layer(2).BestSize(wx.Size(460, 600)).
                 MinSize(wx.Size(320, 300)).
                 Floatable(True).CloseButton(False))
+
+            # TIA-style Instructions task card — between editor and chat (cosmetic shell).
+            if InstructionsPanel is not None:
+                self.InstructionsPanel = InstructionsPanel(self)
+                self.AUIManager.AddPane(
+                    self.InstructionsPanel,
+                    wx.aui.AuiPaneInfo().Name("InstructionsPane").Caption("Instructions").
+                    CaptionVisible(False).Right().Layer(1).
+                    BestSize(wx.Size(270, 600)).MinSize(wx.Size(230, 300)).
+                    Floatable(True).CloseButton(False))
 
             # The HTML sidebar/chat fully replace the native project-tree and
             # library notebooks — DETACH those from AUI so they can never
