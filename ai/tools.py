@@ -584,10 +584,17 @@ class Tools:
         existing = ld.getcontent() or []
         max_id = 0
         rung_count = 0
+        max_bottom = 0
         for inst in existing:
             try:
                 if inst.getlocalId() > max_id:
                     max_id = inst.getlocalId()
+            except Exception:
+                pass
+            try:
+                bottom = inst.gety() + inst.getheight()
+                if bottom > max_bottom:
+                    max_bottom = bottom
             except Exception:
                 pass
             if type(inst).__name__ == "leftPowerRail":
@@ -603,7 +610,8 @@ class Tools:
         RAIL_W = 3
         H_GAP = 50            # horizontal gap between elements
         BRANCH_DY = 40        # vertical gap between parallel branches
-        RUNG_GAP = 20         # vertical gap before next rung
+        RUNG_GAP = 28         # vertical gap before next rung
+        NETWORK_HEADER = 30   # room above each rung for the "Network N" header
         TOP_MARGIN = 30
         LEFT_X = 30
         center_y_rel = CONTACT_H // 2
@@ -611,10 +619,13 @@ class Tools:
         # Number of parallel branches (0 = no parallel section, plain series).
         nb = len(branches)
         rung_height = CONTACT_H if nb == 0 else CONTACT_H + (nb - 1) * BRANCH_DY
-        # Start y of THIS rung in the body coordinate system. Each prior rung
-        # took ~ (CONTACT_H + RUNG_GAP + maybe extra for its own branches) —
-        # but since we don't read those, just keep a generous step.
-        rung_y_top = TOP_MARGIN + rung_count * (CONTACT_H + RUNG_GAP + 30)
+        # Place this rung below the actual bottom of all existing content (so
+        # tall seal-in/branch rungs don't overlap the next), leaving room above
+        # for the network header.
+        if max_bottom:
+            rung_y_top = max_bottom + RUNG_GAP + NETWORK_HEADER
+        else:
+            rung_y_top = TOP_MARGIN + NETWORK_HEADER
 
         # Y of the MAIN (top) row — where series_before / series_after / coil sit.
         main_y_top = rung_y_top
@@ -889,10 +900,17 @@ class Tools:
         existing = ld.getcontent() or []
         max_id = 0
         rung_count = 0
+        max_bottom = 0
         for inst in existing:
             try:
                 if inst.getlocalId() > max_id:
                     max_id = inst.getlocalId()
+            except Exception:
+                pass
+            try:
+                bottom = inst.gety() + inst.getheight()
+                if bottom > max_bottom:
+                    max_bottom = bottom
             except Exception:
                 pass
             if type(inst).__name__ == "leftPowerRail":
@@ -905,13 +923,17 @@ class Tools:
 
         # ---- layout ----------------------------------------------------
         TOP_MARGIN = 30
-        RUNG_STEP = 130          # MOVE rungs are tall (block height 100)
+        RUNG_GAP = 28
+        NETWORK_HEADER = 30      # room above each rung for the "Network N" header
         LEFT_X = 30
         RAIL_W = 3
         CONTACT_W, CONTACT_H = 30, 20
         BLOCK_W, BLOCK_H = 90, 100
 
-        block_y_top = TOP_MARGIN + rung_count * RUNG_STEP
+        if max_bottom:
+            block_y_top = max_bottom + RUNG_GAP + NETWORK_HEADER
+        else:
+            block_y_top = TOP_MARGIN + NETWORK_HEADER
         en_y = block_y_top + 40          # power-flow row (EN / ENO)
         in_y = block_y_top + 80          # data row (IN / OUT)
         rung_height = BLOCK_H

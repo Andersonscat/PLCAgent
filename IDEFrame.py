@@ -62,6 +62,9 @@ except Exception as _ai_import_err:
     _AI_AVAILABLE = False
     _AI_IMPORT_ERROR = _ai_import_err
 
+import sys
+USE_HTML_LD = True   # segmented HTML LD editor (fallback to native LD_Viewer)
+
 # Define PLCOpenEditor controls id
 [
     ID_PLCOPENEDITOR, ID_PLCOPENEDITORLEFTNOTEBOOK,
@@ -2126,8 +2129,17 @@ class IDEFrame(wx.Frame):
                     new_window = Viewer(self.TabsOpened, tagname, self, self.Controler)
                     new_window.RefreshScaling(False)
                 elif bodytype == "LD":
-                    new_window = LD_Viewer(self.TabsOpened, tagname, self, self.Controler)
-                    new_window.RefreshScaling(False)
+                    new_window = None
+                    if _AI_AVAILABLE and USE_HTML_LD:
+                        try:
+                            from ai.ld_editor_panel import LDEditorPanel
+                            new_window = LDEditorPanel(self.TabsOpened, tagname, self, self.Controler)
+                        except Exception as exc:
+                            print(f"[ld-editor] falling back to native: {exc}", file=sys.stderr)
+                            new_window = None
+                    if new_window is None:
+                        new_window = LD_Viewer(self.TabsOpened, tagname, self, self.Controler)
+                        new_window.RefreshScaling(False)
                 elif bodytype == "SFC":
                     new_window = SFC_Viewer(self.TabsOpened, tagname, self, self.Controler)
                     new_window.RefreshScaling(False)

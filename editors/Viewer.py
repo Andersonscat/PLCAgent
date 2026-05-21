@@ -3856,11 +3856,65 @@ class Viewer(EditorPanel, DebugViewer):
         if self.SelectedElement is not None and (self.SelectedElement.IsVisible() or printing):
             self.SelectedElement.Draw(dc)
 
+        # TIA-style "Network N" headers above each LD rung.
+        self._draw_ld_networks(dc)
+
         if not printing:
             if self.Debug:
                 self.InstanceName.Draw(dc)
             if self.rubberBand.IsShown():
                 self.rubberBand.Draw(dc)
+
+    def _draw_ld_networks(self, dc):
+        """Draw TIA-style 'Network N' headers + separator above each LD rung.
+        A rung = a left power rail; works in free-drawing mode too. No-op for
+        non-LD viewers."""
+        if getattr(self, "CurrentLanguage", None) != "LD":
+            return
+        try:
+            from graphics.LD_Objects import LD_PowerRail, LEFTRAIL
+        except Exception:
+            return
+        ys = []
+        try:
+            for el in self.Blocks.values():
+                if isinstance(el, LD_PowerRail) and el.GetType() == LEFTRAIL:
+                    ys.append(el.GetPosition()[1])
+        except Exception:
+            return
+        if not ys:
+            return
+        ys.sort()
+        head_bg = ide_theme.HEADER_BG
+        line = ide_theme.GRID_LINE
+        ink = ide_theme.INK
+        accent = ide_theme.ACCENT
+        try:
+            w = int(self.Editor.GetVirtualSize()[0] / self.ViewScale[0])
+        except Exception:
+            w = 1600
+        w = max(w, 1400)
+        BAR_H = 21
+        font = wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        dc.SetFont(font)
+        for i, y in enumerate(ys):
+            by = y - BAR_H - 6
+            if by < 0:
+                by = 0
+            # header bar background, full width
+            dc.SetPen(wx.TRANSPARENT_PEN)
+            dc.SetBrush(wx.Brush(head_bg))
+            dc.DrawRectangle(0, by, w, BAR_H)
+            # amber accent tab on the left
+            dc.SetBrush(wx.Brush(accent))
+            dc.DrawRectangle(0, by, 3, BAR_H)
+            # label
+            dc.SetTextForeground(ink)
+            dc.DrawText("Network %d" % (i + 1), 11, by + 3)
+            # thin separators top & bottom of the bar
+            dc.SetPen(wx.Pen(line, 1))
+            dc.DrawLine(0, by, w, by)
+            dc.DrawLine(0, by + BAR_H, w, by + BAR_H)
 
     def OnPaint(self, event):
         event.Skip()

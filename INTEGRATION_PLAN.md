@@ -1,135 +1,147 @@
-# plc-cursor — TIA-Portal Integration Plan (Design & Structure)
+# plc-cursor — Master Plan: Look & Work like Siemens TIA Portal
 
-Scope: **design, tabs, layout, file/project structure.** Functionality & content
-(instruction behaviour, editing semantics, simulation) are **out of scope here**
-— discussed separately. Follow `DESIGN.md` for all visuals.
+Roadmap to make plc-cursor **look** (design) and **work** (functionality) like TIA
+Portal, on top of OpenPLC/Beremiz + PLCOpen XML + the AI agent. Follow
+`DESIGN.md` for visuals.
 
-Target mental model = TIA Portal: a single light shell with a left **project
-tree**, a central **work area** of editor tabs, a bottom **Inspector**
-(Properties/Info/Diagnostics), a right **task-card rail** (Instructions/Testing/
-Libraries/Add-Ins), a top **toolbar**, and a **status bar**.
+Legend: ✅ done · 🟡 partial · ⬜ to do · ❌ not applicable to a soft-PLC.
 
 ---
 
-## Phase 0 — Baseline (DONE)
+## 0. Principles & hard constraints (learned this session)
 
-Light theme, custom HTML toolbar, HTML project-tree sidebar, HTML unified
-Inspector (own bottom pane), HTML work-area empty state, custom vector icons,
-subtle 1px section separators, dark-chrome/borders removed. Codified in `DESIGN.md`.
-
----
-
-## Phase 1 — Tabs system (the core of this plan)
-
-Three distinct tab surfaces, one consistent visual language (flat, light, amber
-active-underline; see DESIGN.md §4).
-
-1. **Work-area editor tabs** (open blocks)
-   - Today: native `AuiNotebook` (`TabsOpened`) with `AuiSimpleTabArt` (angled
-     "folder" tabs — dated).
-   - Plan: flat modern tab strip — square tabs, light, active = white + amber
-     underline, hover, middle-click/× close, language badge (ST/LD/FBD) per tab.
-   - Approach A (low risk): custom `AuiTabArt` subclass drawing flat tabs.
-     Approach B (max control): thin HTML tab-bar header above the editor canvas
-     that drives `TabsOpened` page selection. → **decide A vs B.**
-   - Files: `IDEFrame.py` (notebook art), optional `ai/tabbar_panel.py`.
-
-2. **Inspector tabs** — DONE (HTML Properties/Info/Diagnostics + sub-tabs). Keep
-   as the reference style for the others.
-
-3. **Right task-card rail** (Instructions / Testing / Libraries / Add-Ins)
-   - Design only here (content later): a thin vertical rail of collapsible
-     cards on the right, TIA-style rotated labels, expand/collapse, remembers
-     state. The active card slides open as a panel.
-   - Files: new `ai/taskcard_rail.py` (HTML WebView rail) docked Right.
-   - **Content** of each card (the instruction catalogue etc.) is deferred.
-
-**Acceptance:** all tabs (work area, inspector, task cards) share one flat light
-style; no angled/3D tabs anywhere; opening/closing editor tabs is smooth.
+1. **HTML WebView panels are the safe, controllable surface.** Toolbar,
+   sidebar, chat, inspector, work-area empty-state are all HTML — modern,
+   themeable, no native quirks.
+2. **Do NOT restructure the central `AuiNotebook` or subclass C++ `AuiTabArt`.**
+   Both segfault wxPython on this macOS build (verified twice). Editor tabs stay
+   on `AuiSimpleTabArt`.
+3. **Keep AI panel imports clean.** A broken import in the `if _AI_AVAILABLE`
+   block silently disables ALL HTML panels → native Beremiz UI resurfaces.
+4. **The agent authors content** (POUs, ladder, variables) via tools
+   (`add_ladder_rung`, `add_ladder_move_rung`, `add_pou_variable`, …). UI
+   surfaces visualise and lightly edit; the heavy authoring is the agent.
+5. **Restart + verify after every change** (run.sh); watch the log for
+   tracebacks/segfaults.
 
 ---
 
-## Phase 2 — File system & project structure
+## 1. Foundation & design system — ✅ DONE
 
-Goal: a TIA-like project tree and lifecycle on top of our transparent on-disk
-format (no need to copy TIA's opaque object DB).
-
-1. **On-disk format (keep, document):**
-   ```
-   ProjectName/
-     beremiz.xml   ← project config (target, build)
-     plc.xml       ← PLCOpen TC6 XML (types: dataTypes + pous; instances)
-     *.st          ← optional ST sources
-     build/        ← generated C / binary (gitignore)
-   ```
-   - Treat the **folder** as "the project" (like TIA's `.apXX` folder).
-   - Optional: single-file **archive** (`.plcz` = zip of the folder) for
-     New/Open/share — analogous to TIA `.zapXX`.
-
-2. **Project tree ↔ PLCOpen mapping** (one clean model the sidebar renders):
-   | Tree node | Backing PLCOpen / controller |
-   |---|---|
-   | Device root | project (single resource/config) |
-   | Program blocks → POUs | `<pou pouType=…>` + body language |
-   | PLC tags → Default tag table | located `<variable address=…>` |
-   | PLC data types | `<dataTypes>` |
-   | Resources | `<configurations>/<resource>` |
-   - Sidebar (`ai/sidebar_panel.py`) already renders this; formalize a single
-     `project_model` dict the sidebar + inspector both consume.
-
-3. **Lifecycle UX (design + wire to existing controller):**
-   - **New / Open / Save / Save As / Recent** — already in toolbar; ensure
-     modern dialogs and a Recent-projects list.
-   - **Add new block** (modal exists) → refine to TIA "Add new block" (name,
-     type OB/FB/FC/Program, language). **Add new device** — placeholder.
-   - **Context actions** on tree nodes: open, rename, delete, duplicate
-     (right-click menu, HTML).
-   - Double-click node → opens editor tab in work area (wire to
-     `EditProjectElement`).
-
-4. **Layout persistence:** remember panel sizes / collapsed task cards / open
-   tabs across restarts (extend the perspective save we already re-capture).
-
-**Acceptance:** tree mirrors TIA hierarchy; New/Open/Save round-trips the folder;
-double-click opens a tab; add/rename/delete work from the tree.
+Light theme (`ide_theme.py`), custom HTML toolbar (`ai/toolbar_panel.py`) with
+custom vector icons (`ai/toolbar_icons.py`), HTML project-tree sidebar
+(`ai/sidebar_panel.py`), unified HTML inspector (`ai/inspector_panel.py`), HTML
+chat (`ai/chat_panel.py`), white work-area empty state, subtle separators.
+Codified in `DESIGN.md`.
 
 ---
 
-## Phase 3 — Shell polish
+## 2. Project tree ("Devices") — design ✅ / function 🟡
 
-- **Status bar** (bottom): project · target CPU · online/RUN state · scan —
-  light, thin, TIA-like (replaces the current wx status bar styling).
-- **Portal vs Project view** (optional): a task-oriented start screen
-  ("Create / Open / Describe to the agent") vs the full IDE. Low priority.
-- **Detach/resize** panels with light sashes (already 1px GRID_LINE); verify
-  drag works and min-sizes are sane.
+Full TIA hierarchy is rendered: project → device (`Config0 [Soft PLC]`) →
+all sections + Add-new actions + collapse/expand toolbar.
+
+**Make nodes functional (open something on click).** Priority order:
+
+| Node | Action when clicked | Feasibility |
+|---|---|---|
+| Program blocks → POU | open editor tab | ✅ done |
+| Add new block | new-POU modal | ✅ done |
+| PLC tags → Default tag table | open a **tag table** editor (Name/Type/Address/Comment, editable) | 🟡 have data |
+| Device configuration | form: runtime target + I/O address map | 🟡 partial |
+| Online & diagnostics | jump to inspector Diagnostics / connect | 🟡 |
+| Watch and force tables | open a **watch table** (live values + force) | 🟡 have bridge/force |
+| PLC data types | list/edit UDTs (`<dataTypes>`) | 🟡 when present |
+| Program info | compile summary (size, #POU, #tags, call tree) | 🟡 |
+| Resources → Config0.Res0 | show/edit task↔program instances | 🟡 |
+| Software units, Technology objects, External source files, Online backups, Traces, OPC UA, Web applications, Device proxy data, PLC supervisions & alarms, PLC alarm text lists, Local modules | TIA-specific — keep as **empty folders** (placeholders) like TIA shows them | ❌/later |
+
+Also ⬜: right-click context menu (open / rename / delete / duplicate),
+double-click semantics, multi-device note (we have one soft-PLC).
 
 ---
 
-## Phase 4 — Design hardening (sweep)
+## 3. LD graphical editor — TIA-grade (biggest design+function area)
 
-- Audit every remaining native wx surface for dark/90s remnants: menus,
-  modal dialogs, `wx.grid` tables, tree controls, scrollbars.
-- Enforce `ide_theme` tokens / HTML `:root` everywhere; delete stray literals.
-- Verify Retina-crispness of every rendered bitmap (2× rule).
+TIA editor layers (analysed): path bar · toolbar · **Block interface** ·
+**Block title + comment** · **Networks (number + title + comment)** · ladder
+content · status bar.
+
+**Design (on our canvas):**
+- ⬜ **Networks**: number each rung (`Network 1:`), with an editable **title**
+  and **comment** line above it (most recognizable TIA element).
+- ⬜ **Block title** + comment bar at the top of the LD view.
+- 🟡 **Block interface**: collapsible variable strip (we currently hide it for
+  LD — could re-add as a TIA-style collapsible bar).
+- 🟡 editor toolbar: add insert-network, comments on/off, symbolic↔absolute
+  address toggle (we have Monitoring/Zoom/Compile).
+
+**Function:**
+- ✅ render contacts/coils/boxes/branches from PLCOpen; MOVE block tool.
+- ⬜ symbolic ↔ absolute address display toggle (`"Start"` ↔ `%IX0.0`).
+- ⬜ live **monitoring** colouring (green energized) — wire the sim bridge to the
+  wx canvas (HMI ladder already does this in HTML).
+- ⬜ hand-insert elements is optional (agent-authored is primary).
+
+Start here: **numbered networks + title/comment + block title** — pure canvas
+drawing, high TIA-fidelity, no AUI risk.
 
 ---
 
-## Sequencing & risk
+## 4. Inspector window (Properties / Info / Diagnostics) — design ✅ / function 🟡
 
-1. **Phase 1.1 (editor tabs)** — highest visible impact, contained. Decide A/B.
-2. **Phase 2.2–2.3 (tree model + lifecycle)** — unblocks everything content-side.
-3. **Phase 1.3 (task-card rail shell)** — sets the stage for the Instructions
-   catalogue (content later).
-4. **Phase 3 / 4** — polish, do last.
+- ✅ structure + flat tabs; General + IO tags read live.
+- ⬜ **Properties → General** reflects the *selected* object (POU / tag / device),
+  not just the active editor.
+- ⬜ **IO tags** editable (rename/retype/address/comment) writing back to PLCOpen.
+- 🟡 **Info**: build/compile messages teed in; ⬜ add cross-references + clickable
+  search results (jump to location).
+- 🟡 **Diagnostics**: wire real PLC/sim status (RUN/STOP, scan, connection).
 
-## Decisions (locked)
+---
 
-- **Editor tabs:** custom `AuiTabArt` subclass (Approach A) — flat light tabs on
-  the existing `TabsOpened` notebook. Lowest risk, editors keep working.
-- **On-disk format:** keep the transparent project **folder** + add single-file
-  **`.plcz`** archive (zip of the folder) for New/Open/share — TIA `.zap` analogue.
-- **Task-card rail:** ship **all four** shells (Instructions / Testing /
-  Libraries / Add-Ins) as empty collapsible cards; content filled later.
+## 5. Instructions task card (right rail) — ⬜
 
-These are design/structure only; instruction behaviour & content come later.
+TIA right panel: Favorites · Basic · Extended · Technology · Communication.
+- ⬜ HTML rail shell (collapsible cards) — design only first.
+- ⬜ **Basic instructions** catalogue (Bit logic, Timers `TON/TOF`, Counters,
+  Compare, Math, Move, Convert, Word logic, Shift) — backed by matiec stdlib.
+- ⬜ Click/drag an instruction → insert via agent tools (`add_ladder_*`) into the
+  active LD POU. (Drag-drop onto wx canvas is hard; start with click-to-append.)
+- ❌ Extended/Technology/Communication = Siemens-specific; show as empty shells.
+
+---
+
+## 6. Editor tabs — 🟡 (constrained)
+
+Keep **`AuiSimpleTabArt`** (flat light). Custom C++ tab art / HTML-bar wrapping
+the central notebook **segfault** → do not attempt again. Acceptable as-is.
+
+---
+
+## 7. File system / project lifecycle — design 🟡 / function ⬜
+
+- on-disk: keep transparent folder (`beremiz.xml` + `plc.xml` PLCOpen + `*.st` +
+  `build/`); folder = "project" (TIA `.apXX` analogue).
+- ⬜ single-file **`.plcz`** archive (zip) for New/Open/share (TIA `.zap`).
+- ⬜ lifecycle UX: New / Open / Save / Save As / Recent (toolbar wired);
+  Add new block (✅), ⬜ Add new device (placeholder), ⬜ rename/delete/duplicate
+  from the tree.
+- ⬜ persist panel layout / open tabs across restarts.
+
+---
+
+## 8. Sequencing (recommended)
+
+1. **LD networks: number + title + comment + block title** (§3) — highest
+   TIA-fidelity, self-contained canvas work.
+2. **PLC tags table** + **Watch table** (§2/§4) — real, useful, data exists.
+3. **Inspector wiring**: selection-aware Properties, editable IO tags, Info
+   cross-refs (§4).
+4. **Live monitoring colouring** on the LD canvas (§3).
+5. **Instructions rail shell + Basic catalogue** (§5).
+6. **Lifecycle: `.plcz` + rename/delete + layout persistence** (§7).
+7. Polish: status bar, context menus, address toggle.
+
+Each step: design first (HTML/canvas), then wire to PLCOpen/agent, restart+verify.
+Avoid the central-notebook / native-AUI restructuring that caused regressions.

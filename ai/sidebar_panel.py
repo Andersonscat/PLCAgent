@@ -45,13 +45,33 @@ SIDEBAR_HTML = r"""<!doctype html>
  }
 
  #header {
-   padding: 12px 14px 10px;
+   padding: 9px 12px 8px;
+   background: var(--bg-elev);
    border-bottom: 1px solid var(--line);
  }
- #header .label { font-size: 10.5px; color: var(--dim); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 3px; }
- #header .project { color: var(--ink); font-weight: 500; font-size: 14px; }
+ #header .ptitle { color: var(--ink); font-weight: 600; font-size: 13.5px; }
+ #tabrow {
+   display: flex; align-items: flex-end; justify-content: space-between;
+   padding: 0 8px; background: var(--bg);
+   border-bottom: 1px solid var(--line);
+ }
+ #tabrow .dtab {
+   padding: 6px 14px 7px; font-size: 12px; color: var(--ink);
+   border: 1px solid var(--line); border-bottom: none;
+   border-radius: 6px 6px 0 0; background: var(--bg-elev);
+   position: relative; top: 1px; font-weight: 600;
+ }
+ .treebtns { display: flex; gap: 2px; padding-bottom: 4px; }
+ .treebtn {
+   width: 24px; height: 22px; border: 0; background: transparent;
+   border-radius: 5px; color: var(--dim); cursor: pointer; padding: 0;
+   display: inline-flex; align-items: center; justify-content: center;
+ }
+ .treebtn svg { width: 15px; height: 15px; }
+ .treebtn:hover { background: var(--bg-hover); color: var(--ink); }
+ .treebtn:active { transform: scale(.92); }
 
- #content { height: calc(100vh - 60px); overflow-y: auto; padding: 4px 0 16px 0; }
+ #content { height: calc(100vh - 78px); overflow-y: auto; padding: 4px 0 16px 0; }
 
  .section { margin-top: 8px; }
  .section-header {
@@ -193,8 +213,10 @@ SIDEBAR_HTML = r"""<!doctype html>
  .node .ico.ico--accent { color: var(--accent); }
  .node .ico.ico--blue   { color: #6ab0ff; }
  .node .label { color: var(--ink-2); flex: 1; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; }
- .node.group > .label, .node.root > .label { color: var(--ink); }
- .node.root > .label { font-weight: 600; }
+ .node.group > .label, .node.root > .label, .node.device > .label { color: var(--ink); }
+ .node.root > .label, .node.device > .label { font-weight: 600; }
+ .node.action > .label { color: var(--dim); }
+ .node.action:hover > .label { color: var(--accent); }
  .node .count2 { color: var(--dim); font-size: 11px; margin-left: 4px; }
  .node.pou.selected, .node.selected { background: var(--bg-selected); }
  .node.pou.selected .label, .node.selected .label { color: var(--accent); }
@@ -210,8 +232,21 @@ SIDEBAR_HTML = r"""<!doctype html>
 </style></head>
 <body>
 <div id="header">
-  <div class="label">Project</div>
-  <div class="project" id="project-name">no project open</div>
+  <div class="ptitle">Project tree</div>
+</div>
+<div id="tabrow">
+  <div class="dtab active">Devices</div>
+  <div class="treebtns">
+    <button class="treebtn" id="btn-newpou" title="Add new block">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M2 4.5a1 1 0 011-1h3.2l1.3 1.6H13a1 1 0 011 1V12a1 1 0 01-1 1H3a1 1 0 01-1-1z"/><path d="M8 7v3M6.5 8.5h3" stroke-linecap="round"/></svg>
+    </button>
+    <button class="treebtn" id="btn-collapse-all" title="Collapse all">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4 6l4 4 4-4"/></svg>
+    </button>
+    <button class="treebtn" id="btn-expand-all" title="Expand all">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4 10l4-4 4 4"/></svg>
+    </button>
+  </div>
 </div>
 <div id="content">
   <div class="empty">
@@ -254,7 +289,6 @@ SIDEBAR_HTML = r"""<!doctype html>
 
 <script>
 const content = document.getElementById('content');
-const projectName = document.getElementById('project-name');
 let selectedPou = null;
 
 function postToHost(msg) {
@@ -279,6 +313,14 @@ const ICONS = {
   info: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="8" cy="8" r="6"/><path d="M8 7.3v4" stroke-linecap="round"/><circle cx="8" cy="4.9" r=".7" fill="currentColor" stroke="none"/></svg>',
   alarm: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><path d="M4 10.5V7a4 4 0 018 0v3.5l1.3 1.5H2.7z"/><path d="M6.4 13a1.6 1.6 0 003.2 0"/></svg>',
   resource: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.5" y="3" width="11" height="4" rx="1"/><rect x="2.5" y="9" width="11" height="4" rx="1"/><circle cx="5" cy="5" r=".6" fill="currentColor" stroke="none"/><circle cx="5" cy="11" r=".6" fill="currentColor" stroke="none"/></svg>',
+  project: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="3.5" width="12" height="9.5" rx="1.2"/><path d="M2 6h12M5.5 3.5V6"/></svg>',
+  folder: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><path d="M2 4.5a1 1 0 011-1h3.2l1.3 1.6H13a1 1 0 011 1V12a1 1 0 01-1 1H3a1 1 0 01-1-1z"/></svg>',
+  add: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v6M5 8h6"/></svg>',
+  devnet: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="8" cy="3.5" r="1.6"/><circle cx="3.5" cy="12.5" r="1.6"/><circle cx="12.5" cy="12.5" r="1.6"/><path d="M8 5.1v3M8 8.1l-3.6 3M8 8.1l3.6 3"/></svg>',
+  showtags: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 4h12M2 8h12M2 12h8"/></svg>',
+  module: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="2.5" width="4" height="11" rx="1"/><rect x="9" y="2.5" width="4" height="11" rx="1"/></svg>',
+  doc: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><path d="M4 2.5h5L12 5.5V13a.5.5 0 01-.5.5h-7A.5.5 0 014 13z"/><path d="M9 2.5V6h3M6 9h4M6 11h4"/></svg>',
+  main: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.5" y="3" width="11" height="10" rx="1.2"/><path d="M5.5 6.5l2 2-2 2M9 10.5h2.5"/></svg>',
 };
 
 // A non-expandable section row (no children).
@@ -299,32 +341,49 @@ function groupHead(icon, label, accent, count, addBtn, cls) {
          `<span class="label">${esc(label)}</span>${c}${add}</div>`;
 }
 
+// A dim "Add new …" / action row.
+function addLeaf(label, action) {
+  const a = action ? ` data-action="${action}"` : '';
+  return `<div class="node action"${a}><span class="chev leaf"></span>` +
+         `<span class="ico ico--accent">${ICONS.add}</span>` +
+         `<span class="label">${esc(label)}</span></div>`;
+}
+
 function render(state) {
   if (!state) {
-    projectName.textContent = 'no project open';
     content.innerHTML = '<div class="empty">Open a project<br>or describe one in the PLC Agent chat.<div class="hint">File → Open · or “create a 3-floor elevator”</div></div>';
     return;
   }
-  projectName.textContent = state.project || '(unnamed)';
 
   const pous = state.pous || [];
   const resources = state.resources || [];
   const vbp = state._vars_by_pou || {};
   let tagCount = 0;
   for (const k in vbp) tagCount += (vbp[k] || []).length;
+  const dev = (resources[0] || 'PLC_1').split('.')[0] + ' [Soft PLC]';
 
   let html = '<div class="tree">';
 
-  // Device root — everything nests beneath it (TIA "PLC_1 [CPU …]").
-  html += groupHead('plc', state.project || 'PLC_1', 'accent', '', false, 'root');
+  // Project root.
+  html += groupHead('project', state.project || 'Unnamed', 'accent', '', false, 'root');
+  html += '<div class="children">';
+
+  // Project-level items.
+  html += addLeaf('Add new device');
+  html += secLeaf('devnet', 'Devices & networks', 'blue');
+
+  // Device node — everything nests beneath it (TIA "PLC_1 [CPU …]").
+  html += groupHead('plc', dev, 'accent', '', false, 'device');
   html += '<div class="children">';
 
   html += secLeaf('device', 'Device configuration');
   html += secLeaf('diag', 'Online & diagnostics', 'ok');
+  html += secLeaf('folder', 'Software units');
 
   // Program blocks — holds the project's POUs.
   html += groupHead('blocks', 'Program blocks', 'accent', pous.length, true);
   html += '<div class="children">';
+  html += addLeaf('Add new block', 'new-pou');
   for (const pou of pous) {
     const isSel = pou.name === selectedPou;
     const typeLabel = pou.type === 'functionBlock' ? 'FB'
@@ -336,24 +395,30 @@ function render(state) {
                <span class="pou-type">${typeLabel}</span>
              </div>`;
   }
-  if (!pous.length) {
-    html += `<div class="node"><span class="chev leaf"></span><span class="label" style="color:var(--dim);font-size:11.5px">no blocks — ask the agent</span></div>`;
-  }
   html += '</div>';
 
-  // PLC tags — Default tag table child (our tags live in POUs; aggregate).
+  html += secLeaf('folder', 'Technology objects');
+  html += secLeaf('folder', 'External source files');
+
+  // PLC tags — Show all / Add new / Default tag table.
   html += groupHead('tags', 'PLC tags', null, tagCount || '');
   html += '<div class="children">';
+  html += `<div class="node"><span class="chev leaf"></span><span class="ico">${ICONS.showtags}</span><span class="label">Show all tags</span></div>`;
+  html += addLeaf('Add new tag table');
   html += `<div class="node"><span class="chev leaf"></span><span class="ico">${ICONS.tags}</span><span class="label">Default tag table</span><span class="count2">[${tagCount}]</span></div>`;
   html += '</div>';
 
   html += secLeaf('datatypes', 'PLC data types');
   html += secLeaf('watch', 'Watch and force tables');
+  html += secLeaf('folder', 'Online backups');
   html += secLeaf('trace', 'Traces');
   html += secLeaf('comms', 'OPC UA communication', 'blue');
   html += secLeaf('web', 'Web applications', 'blue');
+  html += secLeaf('folder', 'Device proxy data');
   html += secLeaf('info', 'Program info');
-  html += secLeaf('alarm', 'PLC alarms', 'accent');
+  html += secLeaf('alarm', 'PLC supervisions & alarms', 'accent');
+  html += secLeaf('doc', 'PLC alarm text lists');
+  html += secLeaf('module', 'Local modules');
 
   if (resources.length) {
     html += groupHead('resource', 'Resources', null, resources.length);
@@ -365,6 +430,7 @@ function render(state) {
   }
 
   html += '</div>'; // device children
+  html += '</div>'; // project children
   html += '</div>'; // .tree
 
   // Variables of the selected POU.
@@ -391,6 +457,10 @@ function render(state) {
       postToHost({type: 'open_pou', name: selectedPou});
       render(state);
     });
+  });
+  // "Add new block" → new-POU modal.
+  content.querySelectorAll('.node.action[data-action="new-pou"]').forEach(el => {
+    el.addEventListener('click', e => { e.stopPropagation(); openNewPouModal(); });
   });
   // Expand / collapse toggles.
   content.querySelectorAll('.node[data-toggle]').forEach(el => {
@@ -435,6 +505,19 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); submitNewPou(); }
   if (e.key === 'Escape') { e.preventDefault(); closeModal(); }
 });
+
+// Project-tree toolbar (TIA-style): collapse/expand all, add new block.
+function setAllCollapsed(collapsed) {
+  content.querySelectorAll('.node[data-toggle]').forEach(el => {
+    const kids = el.nextElementSibling;
+    el.classList.toggle('collapsed', collapsed);
+    if (kids && kids.classList.contains('children'))
+      kids.classList.toggle('collapsed', collapsed);
+  });
+}
+document.getElementById('btn-collapse-all').addEventListener('click', () => setAllCollapsed(true));
+document.getElementById('btn-expand-all').addEventListener('click', () => setAllCollapsed(false));
+document.getElementById('btn-newpou').addEventListener('click', openNewPouModal);
 </script>
 </body></html>
 """
